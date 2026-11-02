@@ -1,0 +1,21 @@
+# PRIVACY: everything in this folder is ignored by default.
+# Only the files listed below can ever be uploaded to GitHub.
+# Never add bank exports, imports (Import*.gs), Config.gs, logs or guides here.
+*
+!.gitignore
+!README.md
+!.githooks/
+!.githooks/pre-commit
+!tools/
+!tools/privacy-check.js
+!apps-script/
+!apps-script/Code.gs
+!apps-script/Index.html
+!apps-script/appsscript.json
+!apps-script/Config.example.txt
+!docs/
+!docs/index.html
+!docs/manifest.webmanifest
+!docs/sw.js
+!docs/icon-192.png
+!docs/icon-512.png

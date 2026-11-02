@@ -1,0 +1,3 @@
+// Copy this file to Config.gs and paste the ID of your own SelfMate Google Sheet
+// (the long code in its web address). Config.gs is never uploaded to GitHub.
+const SHEET_ID = '';

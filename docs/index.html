@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SelfMate</title>
+<meta name="description" content="Life admin, money, dates and trips in one calm place.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#EDF2E4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14211A" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Instrument+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #EDF2E4; --card: #F8FBF3; --ink: #1D3527; --muted: #5E7266; --line: #D5DEC9; --leaf: #3F8F4F; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #14211A; --card: #1C2C22; --ink: #E7F0E1; --muted: #9DB2A3; --line: #2C4033; --leaf: #7CC487; } }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 16px/1.5 "Instrument Sans", system-ui, sans-serif; }
+  iframe { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: var(--bg); }
+  .setup { max-width: 420px; margin: 0 auto; padding: 48px 20px; }
+  .setup img { width: 96px; height: 96px; border-radius: 26px; }
+  h1 { font-family: "Young Serif", Georgia, serif; font-weight: 400; font-size: 32px; line-height: 1.15; margin: 18px 0 8px; }
+  p { color: var(--muted); }
+  label { display: block; font-size: 14px; color: var(--muted); margin: 18px 0 6px; }
+  input { width: 100%; font: inherit; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+  button { margin-top: 12px; width: 100%; font: inherit; font-weight: 600; border: 0; padding: 13px 16px; border-radius: 22px 5px 22px 5px; background: var(--leaf); color: #fff; cursor: pointer; }
+  .err { color: #B8436B; font-size: 14px; min-height: 1.5em; }
+  .loading { position: fixed; inset: 0; display: grid; place-items: center; font-family: "Young Serif", serif; color: var(--muted); }
+  :focus-visible { outline: 3px solid #F2C14E; outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+// SelfMate home: opens your private SelfMate app full-screen.
+// Your private link is stored only on this device (localStorage); it is never part of this page or the GitHub repository.
+const KEY = 'selfmate_link';
+const valid = u => /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec\?k=[0-9a-f]{20,}$/.test(u);
+const root = document.getElementById('root');
+let saved = null;
+try { saved = localStorage.getItem(KEY); } catch (e) { /* storage blocked: ask every time */ }
+if (location.hash === '#forget') { try { localStorage.removeItem(KEY); } catch (e) {} saved = null; history.replaceState(null, '', location.pathname); }
+
+function openApp(link) {
+  root.innerHTML = '<div class="loading">Watering the garden…</div>';
+  const f = document.createElement('iframe');
+  f.src = link; f.title = 'SelfMate'; f.allow = 'clipboard-write';
+  f.onload = () => { const l = document.querySelector('.loading'); if (l) l.remove(); };
+  root.appendChild(f);
+}
+function setup() {
+  root.innerHTML = `<main class="setup">
+    <img src="icon-192.png" alt="">
+    <h1>Welcome to SelfMate</h1>
+    <p>Paste your private SelfMate link once. It stays only on this phone, so nobody else can open your app from this page.</p>
+    <label for="link">Your private link</label>
+    <input id="link" type="url" inputmode="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec?k=…">
+    <div class="err" id="err"></div>
+    <button id="save">Open SelfMate</button>
+    <p style="font-size:14px">Tip: after this, use Chrome's menu → Install / Add to home screen for the 🌱 icon. To remove the link from this phone, open this page with <b>#forget</b> at the end.</p>
+  </main>`;
+  document.getElementById('save').onclick = () => {
+    const u = document.getElementById('link').value.trim();
+    if (!valid(u)) { document.getElementById('err').textContent = 'That does not look like a SelfMate link. It starts with https://script.google.com/macros/s/ and ends with ?k= and a long code.'; return; }
+    try { localStorage.setItem(KEY, u); } catch (e) { /* will ask again next time */ }
+    openApp(u);
+  };
+}
+saved && valid(saved) ? openApp(saved) : setup();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
