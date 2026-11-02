@@ -64,11 +64,16 @@
   .ring .fill { fill: none; stroke-width: 9; stroke-linecap: round; transition: stroke-dasharray .6s; }
   .ring text { font-family: "Young Serif", serif; font-size: 17px; fill: var(--ink); }
   .cols { display: flex; align-items: flex-end; gap: 6px; height: 120px; padding-top: 8px; }
-  .cols div { flex: 1; text-align: center; font-size: 11px; color: var(--muted); }
+  .cols div { flex: 1; min-width: 0; text-align: center; font-size: 11px; color: var(--muted); }
+  .cols div { overflow-wrap: normal; white-space: nowrap; }
+  .cols.dense { gap: 2px; } .cols.dense div { font-size: 10px; overflow: visible; } .cols.dense b { border-radius: 4px 4px 1px 1px; }
+  /* never let long words or wide content push a page sideways */
+  .card, .row, .ticket, .packet, .blk, .alert, p, h1, h2, h3 { overflow-wrap: anywhere; }
+  svg, img { max-width: 100%; }
   .cols b { display: block; background: var(--sprout); border-radius: 10px 10px 2px 2px; margin-bottom: 4px; min-height: 2px; }
   .cols div:last-child b { background: var(--leaf); }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
-  .chip { background: var(--card); border: 1px solid var(--line); border-radius: 99px; padding: 6px 12px; font-size: 14px; }
+  .chip { background: var(--card); border: 1px solid var(--line); border-radius: 99px; padding: 6px 12px; font-size: 14px; max-width: 100%; overflow-wrap: anywhere; text-align: left; }
   .chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
   .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .tile { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 10px; }
@@ -144,9 +149,9 @@
   .packet .when { padding: 11px 12px 0 0; }
 
   nav#tabs { position: fixed; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; gap: 2px;
-    background: var(--ink); padding: 5px; border-radius: 28px; box-shadow: 0 8px 24px rgba(29,53,39,.25); z-index: 6; max-width: calc(100% - 20px); }
-  nav#tabs button { display: flex; flex-direction: column; align-items: center; gap: 1px; color: var(--bg); padding: 6px 9px 5px; border-radius: 22px;
-    font-size: 10.5px; font-weight: 600; min-width: 52px; }
+    background: var(--ink); padding: 5px; border-radius: 28px; box-shadow: 0 8px 24px rgba(29,53,39,.25); z-index: 6; width: min(calc(100% - 16px), 470px); }
+  nav#tabs button { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; color: var(--bg); padding: 6px 2px 5px; border-radius: 22px;
+    font-size: 10.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   nav#tabs button .i { font-size: 18px; line-height: 1.15; }
   nav#tabs button.on { background: var(--sprout); color: #1D3527; }
   .modal { position: fixed; inset: 0; background: rgba(20,33,26,.45); display: flex; align-items: flex-end; z-index: 10; }
@@ -966,7 +971,7 @@ function srlHistory() {
       ${y}<br>${k(rev[i] - cst[i])}</div>`).join('')}</div>
       <div class="small muted">🟩 revenue, 🟥 costs, number = result</div></div>
     ${last.length ? `<h2>Bank balance, last ${last.length} months</h2>
-    <div class="card"><div class="cols">${last.map(m => `<div><b style="height:${(+m.Balance || 0) / bmax * 90}px;background:var(--accent)"></b>${m.Month.slice(5)}</div>`).join('')}</div>
+    <div class="card"><div class="cols dense">${last.map((m, i) => `<div><b style="height:${(+m.Balance || 0) / bmax * 90}px;background:var(--accent)"></b>${(last.length - 1 - i) % 3 === 0 ? m.Month.slice(5) : '&nbsp;'}</div>`).join('')}</div>
       <div class="small muted">Latest recorded: <b>${lei(last[last.length - 1].Balance)}</b> (${monthName(last[last.length - 1].Month, { month: 'long', year: 'numeric' })})</div></div>` : ''}
     <h2>Costs by type</h2>
     <div class="chips">${['all'].concat(years).map(y => `<button class="chip ${y === cy ? 'on' : ''}" onclick="SEG.srlYear='${y}';render()">${y === 'all' ? 'All years' : y}</button>`).join('')}</div>
