@@ -561,7 +561,7 @@ function viewHome() {
     <div class="label">${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
     <h1>${greet()}${D.me ? ', ' + esc(D.me) : ''}</h1>
     <div class="garden" id="garden">${scene(n)}</div>
-    <div class="habit"><p>${n === 0 ? 'Your plant starts as a seed.' : `${n} ${n === 1 ? 'leaf' : 'leaves'} so far.`} Every Sunday check-in grows one. Missing a week is fine; never miss twice.</p>
+    <div class="habit"><p>${n === 0 ? 'Your plant starts as a seed.' : `${n} ${n === 1 ? 'leaf' : 'leaves'} so far.`}<br>One leaf per Sunday check-in.<br>Skip a week, never two.</p>
       <button class="btn" ${watered ? 'disabled style="opacity:.6"' : ''} onclick="checkIn()">${watered ? 'Watered today' : 'I did my check-in'}</button></div>
     ${s.ready ? (s.left >= 0
         ? `<p class="spend">This week you can still spend <b>${lei(s.left)}</b></p>`
