@@ -56,7 +56,7 @@ const EDITABLE_TABS = ['Dates', 'Transactions', 'Goals', 'Categories', 'Rules', 
 const DELETABLE_TABS = ['Goals', 'Balances', 'ProjectLog', 'Countries', 'TripItems'];   // rows you can remove from the app (everything else: delete in the Sheet)
 const BIG_PROJECT_TOOLS = 'time,money,journal,distance,tasks,parts';
 const DATE_COLS = ['Due', 'LastDone', 'Date', 'Started', 'PaidOn', 'Start', 'End', 'Updated'];
-const PARTNER_SETTINGS = ['LastCheckin'];
+const PARTNER_SETTINGS = [];
 // What identifies a row, per tab. Rows are addressed by their Sheet row number, which shifts when a row above is
 // deleted; before changing a row the server checks these columns still match what the phone saw (see rowFor_).
 const ROW_KEYS = {
@@ -75,7 +75,7 @@ const SEED = {
     ['PartnerEmail', '', 'Gets the household weekly email (leave empty for none)'],
     ['SrlTaxPotPct', 1, '% of each SRL invoice to set aside (micro tax with employee: 1%, confirm with accountant)'],
     ['HabitStart', new Date(), 'Day you started the Sunday check-in habit'],
-    ['LastCheckin', '', 'Filled in by the app'],
+    ['LastCheckin', '', 'Filled in by the app (owner; the partner has PartnerLastCheckin)'],
   ],
   Dates: () => {
     const d = (y, m, day) => new Date(y, m - 1, day);
@@ -614,7 +614,7 @@ function api(key, action, data) {
         if (who.role !== 'owner') throw new Error('Only the owner can do this');
         PropertiesService.getScriptProperties().setProperty('PRIVATE_UNTIL', '0');
         return true;
-      case 'checkin': return checkin_();
+      case 'checkin': return checkin_(who, data.plan);
       case 'deleteRow':
         if (!DELETABLE_TABS.includes(data.tab)) throw new Error('Delete these in the Sheet');
         if (PERSONAL_TABS.includes(data.tab)) checkHobby_(data.tab, who, {}, data.row);
@@ -843,13 +843,24 @@ function renameCategory_(from, to) {
   return n;
 }
 
-// One check-in per day counts; each one grows a leaf on the shared plant.
-function checkin_() {
-  const s = settings_(), today = iso_(new Date());
-  let n = Number(s.Checkins) || 0;
-  const last = s.LastCheckin instanceof Date ? iso_(s.LastCheckin) : String(s.LastCheckin || '').slice(0, 10);
-  if (last !== today) { n++; setSetting_('Checkins', n); setSetting_('LastCheckin', today); }
-  return n;
+// Each person has their own plant: one leaf per week (Monday to Sunday) with a finished check-in,
+// plus their "When…, I will…" plan for the week. The owner keeps the first keys (Checkins, LastCheckin).
+function habitKeys_(role) {
+  const p = role === 'owner' ? '' : 'Partner';
+  return { n: p + 'Checkins', last: p + 'LastCheckin', plan: p ? 'PartnerPlan' : 'OwnerPlan' };
+}
+function habit_(role, s) {
+  const k = habitKeys_(role);
+  return { n: Number(s[k.n]) || 0, last: s[k.last] instanceof Date ? iso_(s[k.last]) : String(s[k.last] || '').slice(0, 10), plan: String(s[k.plan] || '') };
+}
+function checkin_(who, plan) {
+  const k = habitKeys_(who.role), h = habit_(who.role, settings_()), today = new Date();
+  const monday = iso_(new Date(today.getFullYear(), today.getMonth(), today.getDate() - (today.getDay() + 6) % 7));
+  if (!(h.last >= monday)) { h.n++; setSetting_(k.n, h.n); }
+  setSetting_(k.last, iso_(today));
+  if (plan !== undefined) { h.plan = String(plan).slice(0, 300); setSetting_(k.plan, h.plan); }
+  h.last = iso_(today);
+  return h;
 }
 
 function ensureVouchers_() {
@@ -889,6 +900,7 @@ function getData_(who) {
     privateUntil: who.until,
     settings: s,
     me: s[who.role === 'owner' ? 'OwnerName' : 'PartnerName'] || '',
+    habit: habit_(who.role, s),
     dates: read_('Dates').filter(r => who.canPrivate || r.Private !== 'yes'),
     categories: read_('Categories'),
     transactions: read_('Transactions'),

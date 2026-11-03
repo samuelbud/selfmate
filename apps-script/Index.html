@@ -269,6 +269,8 @@ function rateOf(cur) {
 // Payments in another currency count in lei everywhere (totals, insights, trips). The original stays in _orig
 // for display and for telling the server which row this is. Without a rate they stay out of the totals.
 function prepare(d) {
+  // a copy saved by an older version has no habit yet: start from the old shared counter until fresh data arrives
+  if (!d.habit) d.habit = { n: d.role === 'owner' ? +d.settings.Checkins || 0 : 0, last: '', plan: '' };
   const keep = D; D = d;
   d.transactions.forEach(t => {
     if (ron(t) || t._orig) return;
@@ -281,9 +283,11 @@ function prepare(d) {
   return d;
 }
 // How far the bank data goes, per account (manual and meal-voucher rows don't count).
+const myPerson = () => D.role === 'owner' ? 'S' : 'G';   // Person column: S = owner, G = partner (as the import sets it)
+const isMine = t => (t.Person || 'S') === myPerson();
 function dataUpTo() {
   const last = {};
-  D.transactions.filter(t => !['manual', 'vouchers'].includes(t.Source) && t.Account && t.Date)
+  D.transactions.filter(t => isMine(t) && !['manual', 'vouchers'].includes(t.Source) && t.Account && t.Date)
     .forEach(t => { if (!last[t.Account] || t.Date > last[t.Account]) last[t.Account] = t.Date; });
   const list = Object.entries(last).filter(x => days(x[1]) > -120).sort((a, b) => a[1] < b[1] ? -1 : 1);
   return { list, oldest: list.length ? list[0][1] : '' };
@@ -409,6 +413,7 @@ function applyLocal(action, d) {
   if (action === 'addRow' && Array.isArray(list)) { const r = Object.assign({ _row: --TMP, Owner: D.role }, d.values); list.push(r); return r; }
   if (action === 'updateRow' && Array.isArray(list)) { const r = list.find(x => x._row === d.row); if (r) Object.assign(r, d.values); return true; }
   if (action === 'deleteRow' && Array.isArray(list)) { D[d.tab.toLowerCase()] = list.filter(x => x._row !== d.row); return true; }
+  if (action === 'answer') { const r = D.transactions.find(x => x._row === d.row); if (r) r.Category = d.category; return true; }
   if (action === 'markDone') {
     const r = D.dates.find(x => x._row === d.row), t = todayISO();
     if (!r) return false;
@@ -497,8 +502,8 @@ function safeToSpend() {
   const weekly = flexMonth * 7 / 30.4;
   const now = new Date(todayISO() + 'T00:00:00'); now.setDate(now.getDate() - ((now.getDay() + 6) % 7));
   const monday = new Date(now.getTime() - now.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
-  // Up card groceries are paid with meal vouchers, not with money from the salary
-  const spent = -sum(D.transactions.filter(t => ron(t) && t.Date >= monday && +t.Amount < 0 && catOf(t.Category).Type === 'flex' && t.Account !== 'Up card'), t => t.Amount);
+  // Up card groceries are paid with meal vouchers, not with money from the salary; trip payments come out of the trip's budget
+  const spent = -sum(D.transactions.filter(t => ron(t) && t.Date >= monday && +t.Amount < 0 && catOf(t.Category).Type === 'flex' && t.Account !== 'Up card' && !t.Trip), t => t.Amount);
   return { ready: true, weekly, spent, left: weekly - spent, pct: weekly > 0 ? (weekly - spent) / weekly : 0, fixed, flexMonth };
 }
 const spendTx = t => ron(t) && +t.Amount < 0 && ['flex', 'fixed', 'pot'].includes(catOf(t.Category).Type);
@@ -581,7 +586,7 @@ async function loadWeather() {
 }
 function paintGarden(fresh) {
   const g = document.getElementById('garden');
-  if (g) g.innerHTML = scene(+D.settings.Checkins || 0, fresh);
+  if (g) g.innerHTML = scene(D.habit.n, fresh);
 }
 
 function scene(n, fresh) {
@@ -642,12 +647,89 @@ function scene(n, fresh) {
       <span class="deg">${WX.temp}°</span><span class="what">${WX_LABEL[w][0].toUpperCase() + WX_LABEL[w].slice(1)}<br>in ${esc(city())}</span></div>` : ''}`;
 }
 
-async function checkIn() {
-  SEQ++;   // a reload already on its way may have started before this leaf
-  const n = await call('checkin');
-  const grew = n > (+D.settings.Checkins || 0);
-  D.settings.Checkins = n; D.settings.LastCheckin = todayISO();
-  render(); if (grew) { paintGarden(true); toast('A new leaf 🌱 See you next Sunday'); } else toast('Already watered today');
+// ---------- the weekly check-in: 5 steps, all needed, then a leaf (once a week, any day) ----------
+function mondayISO() {
+  const d = new Date(todayISO() + 'T12:00:00');
+  d.setDate(d.getDate() - (d.getDay() + 6) % 7);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+const checkedThisWeek = () => !!D.habit.last && D.habit.last >= mondayISO();
+let CI = null;   // { step, imported } while the check-in is open
+const staleBalances = () => (D.balances || []).filter(b => !b.Updated || -days(b.Updated) > 30);
+const ciSteps = () => [
+  { key: 'import', title: '📥 Bring in this week\'s payments', done: () => CI.imported || (dataUpTo().oldest && -days(dataUpTo().oldest) <= 3) },
+  { key: 'sort', title: '❓ Sort what SelfMate didn\'t know', done: () => !D.transactions.some(t => t.Category === 'Unsorted' && isMine(t)) },
+  { key: 'ahead', title: '🗓️ The next 30 days', done: () => true },
+  { key: 'balances', title: '🧮 Cash and savings', done: () => !staleBalances().length },
+  { key: 'plan', title: '🌱 One plan for the week', done: () => !!(val('ciw') && val('cii')) },
+];
+function startCheckin() { CI = { step: 0, imported: false }; checkinModal(); }
+// A save from inside the check-in closes it: show it again now, and once more when the Sheet's data is back.
+function ciAgain(saving) { if (CI) setTimeout(checkinModal, 0); Promise.resolve(saving).then(() => { if (CI && !$('#modal').classList.contains('hidden')) checkinModal(); }); }
+function checkinModal() {
+  const steps = ciSteps(), st = steps[CI.step];
+  const short = iso => new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  let body = '';
+  if (st.key === 'import') {
+    const f = dataUpTo();
+    body = `<p class="muted">Export the last days from your bank apps as CSV and import them here.</p>
+      ${f.list.length ? `<div class="card small">${f.list.map(x => `<div>${esc(x[0])}: up to <b>${short(x[1])}</b></div>`).join('')}</div>` : '<p class="muted small">No bank data of yours yet.</p>'}
+      ${CI.imported ? '<p>✓ Imported.</p>' : ''}
+      <button class="btn ghost wide" onclick="importModal()">⬆ Import a statement</button>`;
+  } else if (st.key === 'sort') {
+    const uns = D.transactions.filter(t => t.Category === 'Unsorted' && isMine(t));
+    const opts = D.categories.filter(c => c.Category !== 'Unsorted').map(c => `<option value="${esc(c.Category)}">${c.Emoji} ${esc(c.Category)}</option>`).join('');
+    body = uns.length ? '<p class="muted small">Pick a category for each. To teach SelfMate a rule for a shop, sort it from Money instead.</p>' +
+      uns.slice(0, 15).map(t => `<div class="card"><div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(t.Merchant || '(no description)')}</b><b>${(+t.Amount).toLocaleString('ro-RO')}</b></div>
+        <div class="muted small">${fmt(t.Date)}, ${esc(t.Account)}</div>
+        <select onchange="if(this.value){ciAgain(act('answer',{row:${t._row},keyword:'',category:this.value}))}"><option value="">Choose…</option>${opts}</select></div>`).join('') +
+      (uns.length > 15 ? `<p class="muted small">${uns.length - 15} more after these.</p>` : '')
+      : '<p>✓ Everything has a category.</p>';
+  } else if (st.key === 'ahead') {
+    const soon = D.dates.filter(d => d.Due && !isDone(d) && days(d.Due) <= 30).sort((a, b) => a.Due < b.Due ? -1 : 1);
+    body = soon.length ? '<p class="muted small">Already done? Tick it. Needs a step this week? Do it, or make it your plan in step 5.</p>' +
+      soon.map(d => `<div class="row"><div class="grow"><div>${esc(d.Title)}</div><div class="muted small">${fmt(d.Due)}${days(d.Due) < 0 ? ', late' : ''}${+d.Cost ? ', ' + lei(d.Cost) : ''}</div></div>
+        <button class="btn ghost" onclick="ciAgain(doneDate(${d._row}))">✓ Done</button></div>`).join('')
+      : '<p>✓ Nothing due in the next 30 days.</p>';
+  } else if (st.key === 'balances') {
+    const bs = staleBalances();
+    body = bs.length ? '<p class="muted small">Not updated for a month: type what is there now (the same number is fine).</p>' +
+      bs.map(b => `<label>${esc(b.Emoji)} ${esc(b.Name)} (${esc(b.Currency === 'RON' ? 'lei' : b.Currency)})</label>
+        <input id="cib${b._row}" type="number" inputmode="decimal" value="${+b.Amount || 0}">`).join('') +
+      '<div class="btns"><button class="btn ghost" onclick="ciBalances()">Save these</button></div>'
+      : '<p>✓ Up to date (asked again after a month).</p>';
+  } else {
+    const m = D.habit.plan.match(/^When (.*), I will (.*)$/) || [];
+    body = `<p class="muted small">One small, concrete plan. Plans written as "When…, I will…" are kept much more often.</p>
+      <label>When…</label><input id="ciw" value="${esc(m[1] || '')}" placeholder="e.g. I open Glovo on a weekday">
+      <label>I will…</label><input id="cii" value="${esc(m[2] || '')}" placeholder="e.g. cook something from the cupboard instead">`;
+  }
+  const last = CI.step === steps.length - 1;
+  openModal(`<div class="label">Step ${CI.step + 1} of ${steps.length}</div><h3>${st.title}</h3>${body}
+    <div class="btns">${CI.step ? '<button class="btn ghost" onclick="CI.step--;checkinModal()">Back</button>' : ''}
+      <button class="btn" onclick="${last ? 'finishCheckin()' : 'ciNext()'}">${last ? 'Water the plant 🌱' : 'Next'}</button></div>`);
+}
+function ciNext() {
+  const st = ciSteps()[CI.step];
+  if (!st.done()) return toast({ import: 'Import a statement first', sort: 'Sort the ❓ payments first', balances: 'Save the amounts first' }[st.key]);
+  CI.step++; checkinModal();
+}
+async function ciBalances() {
+  for (const b of staleBalances()) await call('updateRow', { tab: 'Balances', row: b._row, values: { Amount: +val('cib' + b._row) || 0, Updated: todayISO() } }).catch(() => null);
+  await load(); checkinModal();
+}
+async function finishCheckin() {
+  const steps = ciSteps(), open = steps.find(x => !x.done());
+  if (open) {
+    if (open.key === 'plan') return toast('Fill in both parts of the plan');
+    CI.step = steps.indexOf(open); checkinModal(); return toast('This step isn\'t done yet');
+  }
+  const plan = `When ${val('ciw')}, I will ${val('cii')}`, before = D.habit.n;
+  closeModal(); CI = null; SEQ++;   // a reload already on its way may have started before this leaf
+  const h = await call('checkin', { plan }).catch(() => null);
+  if (!h) return;
+  D.habit = h; render();
+  if (h.n > before) { paintGarden(true); toast('A new leaf 🌱 See you next week'); } else toast('Plan updated ✓');
   if (STALE) load();
 }
 
@@ -670,14 +752,15 @@ function viewHome() {
   const need = D.dates.filter(d => !d.Due).length;
   const uns = D.transactions.filter(t => t.Category === 'Unsorted').length;
   const trips = D.trips.filter(t => t.Start && days(t.Start) >= 0).sort((a, b) => a.Start < b.Start ? -1 : 1);
-  const n = +D.settings.Checkins || 0, watered = String(D.settings.LastCheckin || '').slice(0, 10) === todayISO();
+  const n = D.habit.n, watered = checkedThisWeek();
   const fill = s.ready ? Math.max(0, Math.min(100, s.pct * 100)) : 0;
   return `
     <div class="label">${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
     <h1>${greet()}${D.me ? ', ' + esc(D.me) : ''}</h1>
     <div class="garden" id="garden">${scene(n)}</div>
-    <div class="habit"><p>${n === 0 ? 'Your plant starts as a seed.' : `${n} ${n === 1 ? 'leaf' : 'leaves'} so far.`}<br>One leaf per Sunday check-in.<br>Skip a week, never two.</p>
-      <button class="btn" ${watered ? 'disabled style="opacity:.6"' : ''} onclick="checkIn()">${watered ? 'Watered today' : 'I did my check-in'}</button></div>
+    <div class="habit"><p>${n === 0 ? 'Your plant starts as a seed.' : `${n} ${n === 1 ? 'leaf' : 'leaves'} so far.`}<br>One leaf per weekly check-in.<br>Skip a week, never two.</p>
+      <button class="btn" ${watered ? 'style="opacity:.75"' : ''} onclick="startCheckin()">${watered ? 'Watered this week ✓' : 'Start my check-in'}</button></div>
+    ${D.habit.plan ? `<p class="muted small">🌱 This week: ${esc(D.habit.plan)}.</p>` : ''}
     ${s.ready ? (s.left >= 0
         ? `<p class="spend">This week you can still spend <b>${lei(s.left)}</b></p>`
         : `<p class="spend">This week you are over by <b>${lei(-s.left)}</b></p>`) +
@@ -895,7 +978,7 @@ function importModal() {
     <b>Revolut:</b> account → ⋯ → Statement → Excel/CSV → choose period.<br>
     Only date, amount and merchant are kept. Card numbers and IBANs are removed. Duplicates are skipped, so overlapping periods are fine.</p>
     <label>Account</label><select id="ia"><option>Banca Transilvania</option><option>Revolut</option><option>Other</option></select>
-    <label>Whose account?</label><select id="ip"><option value="S">Mine</option><option value="G">My partner's</option></select>
+    <label>Whose account?</label><select id="ip"><option value="S" ${myPerson() === 'S' ? 'selected' : ''}>${D.role === 'owner' ? 'Mine' : 'The owner&#39;s'}</option><option value="G" ${myPerson() === 'G' ? 'selected' : ''}>${D.role === 'owner' ? 'My partner&#39;s' : 'Mine'}</option></select>
     <label>CSV file</label><input id="if" type="file" accept=".csv,text/csv,text/plain">
     <div class="btns"><button class="btn" onclick="doImport()">Import</button></div>`);
 }
@@ -909,6 +992,7 @@ function doImport() {
     const res = await call('import', { text: r.result, account, person });
     toast(`✓ ${res.added} added, ${res.skipped} already there, ${res.unsorted} to sort`);
     await load();
+    if (CI) { CI.imported = true; checkinModal(); }
   };
   r.readAsText(f);
 }
@@ -1845,11 +1929,14 @@ function openSettings() {
     <div class="btns"><button class="btn ghost" onclick="lockNow()">🔒 Lock now</button></div>
     <h2>✅ Data check</h2>
     <p class="muted small">Compares your live Sheet with the totals from your old file, month by month.</p>
-    <button class="btn ghost wide" onclick="runDataCheck()">Run data check</button>
+    <button class="btn ghost wide" onclick="runDataCheck(this)">Run data check</button>
     <p class="muted small">Categories, rules and everything else: edit them in your Google Sheet.</p>`);
 }
-async function runDataCheck() {
-  const c = await call('dataCheck');
+async function runDataCheck(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking… (takes a few seconds)'; }
+  const c = await call('dataCheck').catch(() => null);
+  if (btn) { btn.disabled = false; btn.textContent = 'Run data check'; }
+  if (!c) return;
   const bad = c.months.filter(m => !m.ok);
   openModal(`<h3>${c.ok ? '✅ All data matches' : bad.length ? '⚠️ ' + bad.length + ' month(s) differ' : '⚠️ Something differs'}</h3>
     <p class="muted small">Sheet time zone: <b>${esc(c.sheetTimeZone)}</b>, app: <b>${esc(c.scriptTimeZone)}</b><br>
@@ -2182,6 +2269,7 @@ const MOCK = (() => {
   const db = {
     role: 'owner', canPrivate: true, privateUntil: 0,
     me: 'Alex',
+    habit: { n: 5, last: off(-9), plan: '' },
     settings: { HomeCountry: 'RO', MonthlyIncome: 9000, MonthlySavings: 1500, SrlTaxPotPct: 1, HabitStart: off(-12), LastCheckin: off(-6), PartnerEmail: '', Checkins: 5 },
     dates: [
       { _row: 2, Title: 'RCA: Car', Area: 'Car', Due: off(5), RepeatMonths: 12, Cost: 1100 },
@@ -2278,7 +2366,7 @@ const MOCK = (() => {
     if (action === 'setSetting') db.settings[d.key] = d.value;
     if (action === 'deleteRow') { const k = tabKey(d.tab); db[k] = db[k].filter(r => r._row !== d.row); }
     if (action === 'renameCategory') { db.categories.forEach(c => { if (c.Category === d.from) c.Category = d.to; }); db.transactions.forEach(t => { if (t.Category === d.from) t.Category = d.to; }); }
-    if (action === 'checkin') { if (db.settings.LastCheckin !== t) { db.settings.Checkins++; db.settings.LastCheckin = t; } return db.settings.Checkins; }
+    if (action === 'checkin') { const h = db.habit; if (!(h.last >= mondayISO())) h.n++; h.last = t; if (d.plan !== undefined) h.plan = d.plan; return Object.assign({}, h); }
     if (action === 'import') return { added: 0, skipped: 0, unsorted: 0 };
     if (action === 'tagTrip') db.transactions.forEach(x => { if ((d.add || []).includes(x._row)) x.Trip = d.trip; if ((d.remove || []).includes(x._row) && x.Trip === d.trip) x.Trip = ''; });
     return true;
