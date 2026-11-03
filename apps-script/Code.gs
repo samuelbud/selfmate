@@ -20,26 +20,40 @@ const TABS = {
   Dates:        ['Title', 'Area', 'Due', 'RepeatMonths', 'Cost', 'Private', 'LastDone', 'Notes', 'EventId'],
   Categories:   ['Group', 'Category', 'Emoji', 'Type', 'MonthlyTarget'],
   Rules:        ['Match', 'Category'],
-  Transactions: ['Date', 'Amount', 'Currency', 'Merchant', 'Category', 'Account', 'Source', 'Note', 'Hash', 'Person'],
+  // Trip = the trip this payment belongs to (flights, hotels, everything paid while away)
+  Transactions: ['Date', 'Amount', 'Currency', 'Merchant', 'Category', 'Account', 'Source', 'Note', 'Hash', 'Person', 'Trip'],
   Goals:        ['Goal', 'Emoji', 'Target', 'Saved'],
-  Projects:     ['Project', 'Emoji', 'Budget', 'Status', 'Started'],
-  Tasks:        ['Project', 'Phase', 'Task', 'Status'],
-  Items:        ['Project', 'Item', 'Price', 'Shop', 'Bought', 'Date', 'Qty', 'Category', 'Link', 'Notes'],
-  ProjectLog:   ['Date', 'Project', 'Type', 'Hours', 'Km', 'Cost', 'Note'],
+  // Hobbies (the Sheet tabs keep their first names: Projects, Tasks, Items, ProjectLog).
+  // Owner = whose hobby it is (owner | partner): hobbies are personal, each link sees only its own.
+  // Tools = what this hobby tracks, comma separated: time, money, journal, count, distance, tasks, parts.
+  // CountName = what you count (e.g. "loaves"). Category = money category whose bank payments belong to it.
+  Projects:     ['Project', 'Emoji', 'Budget', 'Status', 'Started', 'Owner', 'Tools', 'CountName', 'Category'],
+  Tasks:        ['Project', 'Phase', 'Task', 'Status', 'Owner'],
+  Items:        ['Project', 'Item', 'Price', 'Shop', 'Bought', 'Date', 'Qty', 'Category', 'Link', 'Notes', 'Owner'],
+  // Photo / Thumb = Google Drive file ids (folder "SelfMate photos" in the owner's Drive)
+  ProjectLog:   ['Date', 'Project', 'Type', 'Hours', 'Km', 'Cost', 'Note', 'Count', 'Photo', 'Thumb', 'Owner'],
   Invoices:     ['Number', 'Date', 'Client', 'Amount', 'PaidOn', 'Notes'],
   SrlMonths:    ['Month', 'Balance', 'Revenue', 'Costs', 'Plan', 'Notes'],   // Plan = yes for forecast rows
   SrlCosts:     ['Date', 'Amount', 'Item', 'Type'],
-  Trips:        ['Trip', 'Emoji', 'Start', 'End', 'Budget', 'Private', 'Notes'],
-  // Type: plan (itinerary) | booking (tickets, hotels) | todo | pack
+  // Countries = ISO codes visited on this trip ("GR,IT"). Who went: both | owner | partner (empty = both; private trips = owner).
+  // Approx: empty = exact dates; month / year = an old trip you only remember roughly (Start = first day of that month/year).
+  Trips:        ['Trip', 'Emoji', 'Start', 'End', 'Budget', 'Private', 'Notes', 'Countries', 'Who', 'Approx'],
+  // Type: plan (itinerary) | booking (tickets, hotels) | todo | pack | stop (a place on the route: Title = place, Notes = what you did)
+  //       | extra (a cost that is not in any bank import: cash, paid by someone else, remembered)
   TripItems:    ['Trip', 'Type', 'Date', 'Time', 'Title', 'Cost', 'Done', 'Notes'],
+  // Countries you have been to, marked by hand (trips add theirs automatically). Personal: each link has its own map.
+  Countries:    ['Country', 'Owner', 'Years', 'Notes'],
   // Kind: cash | savings | investment. Amounts you update by hand (cash at home, EUR, savings accounts...)
   Balances:     ['Name', 'Emoji', 'Amount', 'Currency', 'Kind', 'Updated'],
 };
 // Home-screen / browser icon (Microsoft Fluent 3D emoji "Seedling", free to use under the MIT licence)
 const ICON_URL = 'https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Seedling/3D/seedling_3d.png';
-const PRIVATE_TABS =['Projects', 'Tasks', 'Items', 'ProjectLog', 'Invoices', 'SrlMonths', 'SrlCosts'];
-const EDITABLE_TABS = ['Dates', 'Transactions', 'Goals', 'Categories', 'Rules', 'Trips', 'TripItems', 'Balances'].concat(PRIVATE_TABS);
-const DELETABLE_TABS = ['Goals', 'Balances'];   // rows you can remove from the app (everything else: delete in the Sheet)
+const PRIVATE_TABS =['Invoices', 'SrlMonths', 'SrlCosts'];
+const HOBBY_TABS = ['Projects', 'Tasks', 'Items', 'ProjectLog'];   // personal: each row belongs to one person
+const PERSONAL_TABS = HOBBY_TABS.concat(['Countries']);   // rows with an Owner: each link sees and changes only its own
+const EDITABLE_TABS = ['Dates', 'Transactions', 'Goals', 'Categories', 'Rules', 'Trips', 'TripItems', 'Balances'].concat(PRIVATE_TABS, PERSONAL_TABS);
+const DELETABLE_TABS = ['Goals', 'Balances', 'ProjectLog', 'Countries', 'TripItems'];   // rows you can remove from the app (everything else: delete in the Sheet)
+const BIG_PROJECT_TOOLS = 'time,money,journal,distance,tasks,parts';
 const DATE_COLS = ['Due', 'LastDone', 'Date', 'Started', 'PaidOn', 'Start', 'End', 'Updated'];
 const PARTNER_SETTINGS = ['LastCheckin'];
 
@@ -166,11 +180,6 @@ const SEED = {
     ['pack', 'Passport / CI'], ['pack', 'Cards + some cash'], ['pack', 'Phone charger + power bank'],
     ['pack', 'Medicines'], ['pack', 'Toiletries'], ['pack', 'Travel adapter'],
   ].map(i => ['Example trip', i[0], '', '', i[1], '', '', '']),
-  Projects: () => [['Example project', '🛠️', 0, 'active', new Date()]],
-  Tasks: () => [
-    ['Example project', 'Plan', 'Write down what is already done', 'todo'],
-    ['Example project', 'Plan', 'List the remaining jobs here', 'todo'],
-  ],
   Balances: () => [
     ['Cash at home', '💵', 0, 'RON', 'cash', ''],
     ['Cash in EUR', '💶', 0, 'EUR', 'cash', ''],
@@ -264,11 +273,12 @@ function imports_() {
   if (typeof IMPORT_HISTORY !== 'undefined') list.push(Object.assign({ name: 'Old file (Monitorizare_Financiara)', prefix: 'old|' }, IMPORT_HISTORY));
   if (typeof IMPORT_BANK !== 'undefined') list.push(Object.assign({ name: 'Bank statements BT + Revolut' }, IMPORT_BANK));
   if (typeof IMPORT_FIXES !== 'undefined') list.push(Object.assign({ name: 'Confirmed corrections' }, IMPORT_FIXES));
+  if (typeof IMPORT_TRIPS !== 'undefined') list.push(Object.assign({ name: 'Past trips' }, IMPORT_TRIPS));
   return list;
 }
 
 function upgrade_() {
-  if (prop_('SCHEMA') === '4' && imports_().every(h => prop_('IMPORTED_' + h.id))) return;
+  if (prop_('SCHEMA') === '7' && imports_().every(h => prop_('IMPORTED_' + h.id))) return;
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -284,6 +294,19 @@ function upgrade_() {
     if (prop_('SCHEMA') < '4') {
       ensureTabs_(ss_());
       setProp_('SCHEMA', '4');
+    }
+    if (prop_('SCHEMA') < '5') {
+      ensureTabs_(ss_());
+      hobbiesFromProjects_();
+      setProp_('SCHEMA', '5');
+    }
+    if (prop_('SCHEMA') < '6') {          // v2.6: payments can belong to a trip; countries map
+      ensureTabs_(ss_());
+      setProp_('SCHEMA', '6');
+    }
+    if (prop_('SCHEMA') < '7') {          // v2.7: old trips with only a month or a year
+      ensureTabs_(ss_());
+      setProp_('SCHEMA', '7');
     }
     imports_().filter(h => !prop_('IMPORTED_' + h.id)).forEach(h => {
       appendRows_('Transactions', h.transactions);
@@ -304,11 +327,44 @@ function upgrade_() {
         const t = read_('Transactions').find(x => x.Hash === u[0]);
         if (t) update_('Transactions', t._row, u[1]);
       });
+      if (h.trips) {                      // a trip whose name is already in the Sheet is kept as it is
+        const have = new Set(read_('Trips').map(t => t.Trip));
+        appendRows_('Trips', h.trips.filter(t => !have.has(t[0])));
+        appendRows_('TripItems', h.tripItems.filter(i => !have.has(i[0])));
+      }
+      if (h.tripTags) setColumn_('Transactions', 'Trip', 'Hash', h.tripTags, false);
       setProp_('IMPORTED_' + h.id, new Date().toISOString());
     });
   } finally {
     lock.releaseLock();
   }
+}
+
+// v2.5: projects become hobbies. Existing projects keep all their data and get every tool ("Big project").
+// Tasks / parts / log rows that point to a project missing from the Projects tab get a hobby row too.
+function hobbiesFromProjects_() {
+  const have = new Set();
+  read_('Projects').forEach(p => {
+    have.add(p.Project);
+    const v = {};
+    if (!p.Owner) v.Owner = 'owner';
+    if (!p.Tools) v.Tools = BIG_PROJECT_TOOLS;
+    if (!p.Category) { const c = projectCategory_(p.Project); if (c) v.Category = c; }
+    if (Object.keys(v).length) update_('Projects', p._row, v);
+  });
+  ['Tasks', 'Items', 'ProjectLog'].forEach(tab => read_(tab).forEach(r => {
+    if (!r.Project || have.has(r.Project)) return;
+    have.add(r.Project);
+    append_('Projects', { Project: r.Project, Emoji: '🛠️', Budget: 0, Status: 'active', Started: '', Owner: 'owner',
+                          Tools: BIG_PROJECT_TOOLS, Category: projectCategory_(r.Project) });
+  }));
+  const s = settings_();
+  if (!s.ProjectsName || s.ProjectsName === 'Projects') setSetting_('ProjectsName', 'Hobbies');
+}
+// The money category of type "project" whose first word is in the project's name ("Campervan project" <-> "My campervan").
+function projectCategory_(name) {
+  const c = read_('Categories').find(c => c.Type === 'project' && String(name).toLowerCase().includes(String(c.Category).split(' ')[0].toLowerCase()));
+  return c ? c.Category : '';
 }
 
 // The Sheet was created in New York time while the script runs in Bucharest time, so every stored
@@ -373,10 +429,41 @@ function dataCheck_() {
     return { name: h.name, months: months, ok: months.every(m => m.ok) };
   });
   const first = sheet_('Transactions').getRange(2, 1, 1, 1);
-  return { ok: sections.every(s => s.ok), sections: sections, months: [].concat.apply([], sections.map(s => s.months)),
+  const hobbies = hobbyCheck_(), trips = tripCheck_(all);
+  return { ok: sections.every(s => s.ok) && hobbies.ok && trips.ok, sections: sections, hobbies: hobbies, trips: trips, months: [].concat.apply([], sections.map(s => s.months)),
            sheetTimeZone: ss_().getSpreadsheetTimeZone(), scriptTimeZone: Session.getScriptTimeZone(),
            shiftFound: prop_('DATE_SHIFT_FIXED') || 'not measured',
            sample: { shown: first.getDisplayValues()[0][0], raw: String(first.getValues()[0][0]) } };
+}
+
+// Hobbies: totals per hobby, and rows whose hobby is missing (they would be invisible in the app).
+function hobbyCheck_() {
+  const hobbies = read_('Projects'), key = r => (r.Owner || 'owner') + '|' + r.Project;
+  const known = new Set(hobbies.map(key)), orphans = [], rows = {};
+  ['Tasks', 'Items', 'ProjectLog'].forEach(tab => rows[tab] = read_(tab));
+  Object.keys(rows).forEach(tab => rows[tab].forEach(r => { if (!known.has(key(r))) orphans.push(tab + ' row ' + r._row + ': ' + r.Project); }));
+  const list = hobbies.map(h => {
+    const mine = tab => rows[tab].filter(r => key(r) === key(h));
+    return { name: h.Project, owner: h.Owner || 'owner', tools: h.Tools, tasks: mine('Tasks').length, items: mine('Items').length,
+             itemsLei: mine('Items').reduce((s, i) => s + (Number(i.Price) || 0), 0), log: mine('ProjectLog').length,
+             hours: mine('ProjectLog').reduce((s, l) => s + (Number(l.Hours) || 0), 0) };
+  });
+  return { ok: !orphans.length && hobbies.every(h => h.Tools), list: list, orphans: orphans };
+}
+
+// Trips: payments linked to each trip, compared with the confirmed import (if any); links to trips that don't exist.
+function tripCheck_(all) {
+  const r2 = n => Math.round(n * 100) / 100, exp = {};
+  imports_().filter(h => h.tripExpected).forEach(h => Object.assign(exp, h.tripExpected));
+  const trips = read_('Trips'), names = new Set(trips.map(t => t.Trip)), live = {};
+  all.filter(t => t.Trip).forEach(t => { const e = live[t.Trip] = live[t.Trip] || { rows: 0, spent: 0 }; e.rows++; e.spent -= Number(t.Amount) || 0; });
+  const list = trips.filter(t => live[t.Trip] || exp[t.Trip]).map(t => {
+    const l = live[t.Trip] || { rows: 0, spent: 0 }, x = exp[t.Trip];
+    return { name: t.Trip, rows: l.rows, spent: r2(l.spent), expRows: x ? x.rows : null, expSpent: x ? x.spent : null,
+             ok: !x || (l.rows === x.rows && Math.abs(l.spent - x.spent) < 0.01) };
+  });
+  const orphans = Object.keys(live).filter(n => !names.has(n)).map(n => n + ': ' + live[n].rows + ' payments');
+  return { ok: list.every(t => t.ok) && !orphans.length, list: list, orphans: orphans };
 }
 
 // Nearest midnight (script time zone) to a date value.
@@ -411,6 +498,22 @@ function appendRows_(name, rows) {
   const sh = sheet_(name), sheetHead = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String), head = TABS[name];
   const out = rows.map(r => sheetHead.map(h => { const i = head.indexOf(h); return i < 0 ? '' : toCell_(h, r[i]); }));
   sh.getRange(sh.getLastRow() + 1, 1, out.length, sheetHead.length).setValues(out);
+}
+
+// Write one column for many rows at once: rows whose key column is in map get map[key].
+// overwrite = false keeps cells that already have a value. Returns how many cells changed.
+function setColumn_(name, col, keyCol, map, overwrite) {
+  const sh = sheet_(name), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  const c = head.indexOf(col), k = head.indexOf(keyCol), n = sh.getLastRow() - 1;
+  if (c < 0 || k < 0 || n < 1) return 0;
+  const keys = sh.getRange(2, k + 1, n, 1).getValues(), rng = sh.getRange(2, c + 1, n, 1), v = rng.getValues();
+  let changed = 0;
+  keys.forEach((r, i) => {
+    if (!(r[0] in map) || (!overwrite && v[i][0] !== '') || v[i][0] === map[r[0]]) return;
+    v[i][0] = map[r[0]]; changed++;
+  });
+  if (changed) rng.setValues(v);
+  return changed;
 }
 
 function showMyLinks() {
@@ -454,6 +557,7 @@ function api(key, action, data) {
   }
   if (!sessionOk_(who, data._s)) throw new Error('LOCKED');
   if (action === 'getData') return getData_(who);
+  if (action === 'photos') return photos_(who, data.ids || []);   // read-only: no lock needed
 
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -461,19 +565,23 @@ function api(key, action, data) {
     switch (action) {
       case 'addRow':
         checkTab_(data.tab, who, data.values);
+        if (PERSONAL_TABS.includes(data.tab)) checkHobby_(data.tab, who, data.values, 0);
+        if (data.tab === 'ProjectLog' && data.values._photo) Object.assign(data.values, savePhoto_(data.values));
         const row = append_(data.tab, data.values);
         if (data.tab === 'Dates') syncRow_(row);
         return row;
       case 'updateRow':
         checkTab_(data.tab, who, data.values);
-        if (['Dates', 'Trips', 'TripItems'].includes(data.tab)) {
+        if (['Dates', 'Trips', 'TripItems', 'Transactions'].includes(data.tab)) {
           const old = read_(data.tab).find(r => r._row === data.row);
           if (old) checkTab_(data.tab, who, old);
         }
+        if (PERSONAL_TABS.includes(data.tab)) checkHobby_(data.tab, who, data.values, data.row);
         update_(data.tab, data.row, data.values);
         if (data.tab === 'Dates') syncRow_(data.row);
         return true;
       case 'markDone': return markDone_(data.row, who);
+      case 'tagTrip': return tagTrip_(who, data.trip, data.add || [], data.remove || []);
       case 'import': return import_(data.text, data.account, data.person);
       case 'answer': return answer_(data);
       case 'setSetting':
@@ -491,6 +599,12 @@ function api(key, action, data) {
       case 'checkin': return checkin_();
       case 'deleteRow':
         if (!DELETABLE_TABS.includes(data.tab)) throw new Error('Delete these in the Sheet');
+        if (PERSONAL_TABS.includes(data.tab)) checkHobby_(data.tab, who, {}, data.row);
+        if (data.tab === 'TripItems') checkTab_(data.tab, who, read_('TripItems').find(r => r._row === data.row));
+        if (data.tab === 'ProjectLog') {
+          const l = read_('ProjectLog').find(r => r._row === data.row);
+          [l.Photo, l.Thumb].filter(Boolean).forEach(trashFile_);   // photos go to the Drive bin (restorable for 30 days)
+        }
         sheet_(data.tab).deleteRow(data.row);
         return true;
       case 'renameCategory':
@@ -578,12 +692,91 @@ function checkTab_(tab, who, values) {
   const v = values || {};
   const priv = PRIVATE_TABS.includes(tab) ||
     (['Dates', 'Trips'].includes(tab) && v.Private === 'yes') ||
-    (tab === 'TripItems' && privateTrips_().has(v.Trip));
+    (['TripItems', 'Transactions'].includes(tab) && v.Trip && privateTrips_().has(v.Trip));
   if (priv) throw new Error('This part is private');
 }
 
 function privateTrips_() {
   return new Set(read_('Trips').filter(t => t.Private === 'yes').map(t => t.Trip));
+}
+
+// Hobbies are personal: you can only add to, change or delete your own.
+function checkHobby_(tab, who, values, row) {
+  const mine = r => (r.Owner || 'owner') === who.role;
+  if (row) {
+    const old = read_(tab).find(r => r._row === row);
+    if (!old || !mine(old)) throw new Error('This belongs to someone else');
+  }
+  if ('Owner' in values && values.Owner !== who.role) throw new Error('This belongs to someone else');
+  if (!row) values.Owner = who.role;
+  if (tab === 'Countries') {
+    if (!row && !/^[A-Z]{2}$/.test(String(values.Country || ''))) throw new Error('Unknown country');
+    if (!row && read_('Countries').some(c => mine(c) && c.Country === values.Country)) throw new Error('Already on your map');
+  } else if (tab === 'Projects') {
+    if (!row && !String(values.Project || '').trim()) throw new Error('Give it a name');
+    if (!row && read_('Projects').some(p => mine(p) && p.Project === values.Project)) throw new Error('You already have a hobby with that name');
+    if (row && 'Project' in values) throw new Error('Names cannot be changed here');
+  } else if ('Project' in values && !read_('Projects').some(p => mine(p) && p.Project === values.Project)) {
+    throw new Error('Hobby not found');
+  }
+}
+
+// ---------- Hobby photos (Google Drive, only files SelfMate made itself: drive.file permission) ----------
+const DRIVE_API = 'https://www.googleapis.com/drive/v3/files';
+function drive_(url, opt) {
+  opt = Object.assign({ muteHttpExceptions: true }, opt || {});
+  opt.headers = Object.assign({ Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, opt.headers || {});
+  const r = UrlFetchApp.fetch(url, opt);
+  if (r.getResponseCode() >= 300) throw new Error('Google Drive said: ' + r.getContentText().slice(0, 200));
+  return r;
+}
+function photoFolder_() {
+  let id = prop_('PHOTO_FOLDER');
+  if (id) {
+    try { if (!JSON.parse(drive_(DRIVE_API + '/' + id + '?fields=trashed').getContentText()).trashed) return id; } catch (e) { /* gone: make a new one */ }
+  }
+  id = JSON.parse(drive_(DRIVE_API + '?fields=id', { method: 'post', contentType: 'application/json',
+    payload: JSON.stringify({ name: 'SelfMate photos', mimeType: 'application/vnd.google-apps.folder' }) }).getContentText()).id;
+  setProp_('PHOTO_FOLDER', id);
+  return id;
+}
+function uploadJpeg_(name, base64, folder) {
+  const b = 'selfmate' + Date.now();
+  const meta = JSON.stringify({ name: name, parents: [folder], mimeType: 'image/jpeg' });
+  const bytes = Utilities.newBlob('--' + b + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + meta +
+                                  '\r\n--' + b + '\r\nContent-Type: image/jpeg\r\n\r\n').getBytes()
+    .concat(Utilities.base64Decode(base64), Utilities.newBlob('\r\n--' + b + '--').getBytes());
+  return JSON.parse(drive_('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
+    { method: 'post', contentType: 'multipart/related; boundary=' + b, payload: bytes }).getContentText()).id;
+}
+// The phone sends the picture already shrunk: a large one (about 1600 px) and a small one for the timeline.
+function savePhoto_(v) {
+  const clean = s => String(s || '').replace(/^data:image\/\w+;base64,/, '');
+  const folder = photoFolder_(), name = String(v.Date || iso_(new Date())) + ' ' + String(v.Project || 'hobby').replace(/[\\/:*?"<>|]/g, '');
+  const out = { Photo: uploadJpeg_(name + '.jpg', clean(v._photo), folder),
+                Thumb: v._thumb ? uploadJpeg_(name + ' (small).jpg', clean(v._thumb), folder) : '' };
+  delete v._photo; delete v._thumb;
+  return out;
+}
+function trashFile_(id) {
+  try { drive_(DRIVE_API + '/' + id, { method: 'patch', contentType: 'application/json', payload: JSON.stringify({ trashed: true }) }); } catch (e) { /* already gone */ }
+}
+// Send photos to the phone, but only ones from hobbies this link may see.
+function photos_(who, ids) {
+  const allowed = new Set();
+  visibleHobbyRows_(who, 'ProjectLog').forEach(l => { if (l.Photo) allowed.add(String(l.Photo)); if (l.Thumb) allowed.add(String(l.Thumb)); });
+  const out = {};
+  ids.slice(0, 24).filter(id => allowed.has(String(id))).forEach(id => {
+    try { out[id] = 'data:image/jpeg;base64,' + Utilities.base64Encode(drive_(DRIVE_API + '/' + id + '?alt=media').getContent()); } catch (e) { out[id] = ''; }
+  });
+  return out;
+}
+// Your own hobby rows; while the owner shares private views, the partner also sees the owner's (read-only).
+function visibleHobbyRows_(who, tab) {
+  return read_(tab).filter(r => {
+    const o = r.Owner || 'owner';
+    return o === who.role || (who.role === 'partner' && who.canPrivate && o === 'owner');
+  }).map(r => { if ((r.Owner || 'owner') !== who.role) r._ro = true; return r; });
 }
 
 // Meal vouchers (Up card) never show up in bank data: each month add the voucher income and,
@@ -594,7 +787,7 @@ function ensureSettings_() {
   if (s.OwnerName === undefined) setSetting_('OwnerName', '');
   if (s.PartnerName === undefined) setSetting_('PartnerName', '');
   if (s.Checkins === undefined) setSetting_('Checkins', s.LastCheckin ? 1 : 0);
-  [['SrlName', 'SRL'], ['ProjectsName', 'Projects'], ['City', 'Cluj-Napoca'], ['EurRate', 5]].forEach(kv => { if (s[kv[0]] === undefined) setSetting_(kv[0], kv[1]); });
+  [['SrlName', 'SRL'], ['ProjectsName', 'Hobbies'], ['City', 'Cluj-Napoca'], ['EurRate', 5], ['HomeCountry', 'RO']].forEach(kv => { if (s[kv[0]] === undefined) setSetting_(kv[0], kv[1]); });
 }
 
 // Rename a category in the Categories tab and in every transaction and rule that uses it.
@@ -666,9 +859,27 @@ function getData_(who) {
     const hidden = privateTrips_();
     out.trips = out.trips.filter(t => t.Private !== 'yes');
     out.tripitems = out.tripitems.filter(i => !hidden.has(i.Trip));
+    out.transactions.forEach(t => { if (hidden.has(t.Trip)) t.Trip = ''; });
   }
+  out.countries = read_('Countries').filter(c => (c.Owner || 'owner') === who.role);
   if (who.canPrivate) PRIVATE_TABS.forEach(t => out[t.toLowerCase()] = read_(t));
+  HOBBY_TABS.forEach(t => out[t.toLowerCase()] = visibleHobbyRows_(who, t));
   return out;
+}
+
+// Link payments to a trip (add) or unlink them (remove). Rows are Sheet row numbers of the Transactions tab.
+function tagTrip_(who, trip, add, remove) {
+  const t = read_('Trips').find(x => x.Trip === trip);
+  if (!t) throw new Error('Trip not found');
+  checkTab_('Trips', who, t);
+  const hidden = who.canPrivate ? new Set() : privateTrips_(), map = {};
+  read_('Transactions').forEach(x => {
+    if (add.includes(x._row) && !hidden.has(x.Trip)) map[x._row] = trip;
+    if (remove.includes(x._row) && x.Trip === trip) map[x._row] = '';
+  });
+  const sh = sheet_('Transactions'), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String), c = head.indexOf('Trip') + 1;
+  Object.keys(map).forEach(r => sh.getRange(Number(r), c).setValue(map[r]));
+  return Object.keys(map).length;
 }
 
 function markDone_(row, who) {
