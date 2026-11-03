@@ -201,6 +201,7 @@
   #toast { position: fixed; left: 50%; bottom: 92px; transform: translateX(-50%); background: var(--ink); color: var(--bg);
     padding: 10px 16px; border-radius: 99px; font-weight: 600; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 20; }
   #toast.show { opacity: 1; }
+  .updating { text-align: center; font-size: 12px; color: var(--muted); padding: 4px; }
   .banner { background: var(--warn-soft); color: var(--warn); text-align: center; font-size: 13px; padding: 6px; font-weight: 600; }
   .seg { display: flex; background: var(--line); border-radius: 16px; padding: 3px; margin: 10px 0; }
   .seg button { flex: 1; padding: 7px 0; border-radius: 13px; font-size: 13.5px; font-weight: 600; color: var(--muted); }
@@ -265,9 +266,28 @@ let SESSION = (() => { try { return localStorage.getItem(SKEY) || ''; } catch (e
 function saveSession(t) {
   SESSION = t || '';
   try { t ? localStorage.setItem(SKEY, t) : localStorage.removeItem(SKEY); } catch (e) { /* storage blocked: PIN asked each time */ }
+  if (!t) saveCopy(null);
 }
+// The last data seen on this phone, so the app opens at once and refreshes in the background.
+// Kept only while the phone stays unlocked; locking or logging out wipes it.
+const CKEY = 'selfmate_copy_' + KEY.slice(0, 8);
+let STALE = false;   // showing the saved copy: its row numbers may be out of date, so row edits wait
+function saveCopy(d) {
+  try { d ? localStorage.setItem(CKEY, JSON.stringify(d)) : localStorage.removeItem(CKEY); }
+  catch (e) { try { localStorage.removeItem(CKEY); } catch (e2) { /* blocked */ } }   // too big or blocked: open normally
+}
+function savedCopy() {
+  try {
+    const d = JSON.parse(localStorage.getItem(CKEY) || 'null');
+    if (!d || !(d.sessionUntil > Date.now())) return null;                                 // PIN session over: ask for the PIN first
+    if (d.role === 'partner' && d.canPrivate && d.privateUntil < Date.now()) return null;   // sharing ended
+    return d;
+  } catch (e) { return null; }
+}
+const ROW_EDITS = ['updateRow', 'deleteRow', 'markDone', 'answer', 'tagTrip'];
 
 function call(action, data) {
+  if (STALE && ROW_EDITS.includes(action)) { toast('Getting the latest data, try again in a second'); return Promise.reject(new Error('stale')); }
   const payload = Object.assign({}, data || {}, { _s: SESSION });
   return new Promise((res, rej) => {
     if (window.google && google.script && google.script.run) {
@@ -280,13 +300,15 @@ function call(action, data) {
   });
 }
 async function load() {
-  if (!D) {
+  if (!D && !SESSION) {   // with a remembered session, getData itself says LOCKED if it has run out
     const st = await call('pinStatus');
     if (!st.valid) return lockScreen(st);
   }
-  const seq = SEQ, d = await call('getData');
-  if (seq !== SEQ) return;   // a newer change happened meanwhile: its own reload will show it
-  D = d;
+  if (!D && SESSION && (D = savedCopy())) { STALE = true; render(); }
+  const seq = SEQ, d = await call('getData').catch(() => null);
+  if (!d || seq !== SEQ) return;   // locked, or a newer change happened meanwhile: its own reload will show it
+  D = d; STALE = false;
+  saveCopy(d);
   render();
   if (!WX) loadWeather();
 }
@@ -416,6 +438,7 @@ function render() {
   $('#tabs').innerHTML = tabs.map(t => `<button class="${t[0] === TAB ? 'on' : ''}" onclick="go('${t[0]}')"><span class="i">${t[1]}</span>${esc(tabName(t))}</button>`).join('');
   $('#banner').innerHTML = D.role === 'partner' && D.canPrivate
     ? `<div class="banner">🔓 Private views shared until ${new Date(D.privateUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>` : '';
+  if (STALE) $('#banner').innerHTML += '<div class="updating">Updating…</div>';
   $('#view').innerHTML = VIEWS[TAB]();
   loadPhotos();
 }
@@ -578,10 +601,12 @@ function scene(n, fresh) {
 }
 
 async function checkIn() {
+  SEQ++;   // a reload already on its way may have started before this leaf
   const n = await call('checkin');
   const grew = n > (+D.settings.Checkins || 0);
   D.settings.Checkins = n; D.settings.LastCheckin = todayISO();
   render(); if (grew) { paintGarden(true); toast('A new leaf 🌱 See you next Sunday'); } else toast('Already watered today');
+  if (STALE) load();
 }
 
 function viewHome() {
@@ -2164,7 +2189,7 @@ const MOCK = (() => {
     if (action === 'pinStatus') return { role: 'owner', hasPin: true, valid: unlocked };
     if (action === 'login') { if (d.pin !== '1234') { toast('⚠️ Wrong PIN (preview PIN is 1234)'); throw new Error('wrong'); } unlocked = true; return 'preview'; }
     if (action === 'logout') { unlocked = false; return true; }
-    if (action === 'getData') return JSON.parse(JSON.stringify(window.TEST_DB || db));
+    if (action === 'getData') return Object.assign(JSON.parse(JSON.stringify(window.TEST_DB || db)), { sessionUntil: Date.now() + 864e5 });
     if (action === 'addRow') { const k = tabKey(d.tab), v = Object.assign({ _row: row++, Owner: 'owner' }, d.values);
       if (v._photo) { v.Photo = 'p' + v._row; v.Thumb = 't' + v._row; MOCK_PH[v.Photo] = v._photo; MOCK_PH[v.Thumb] = v._thumb; delete v._photo; delete v._thumb; }
       (db[k] = db[k] || []).push(v); return v._row; }

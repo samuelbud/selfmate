@@ -556,7 +556,8 @@ function api(key, action, data) {
     return login_(who, data.pin, true);
   }
   if (!sessionOk_(who, data._s)) throw new Error('LOCKED');
-  if (action === 'getData') return getData_(who);
+  // sessionUntil: the phone keeps its saved copy of the data only while this PIN session lasts.
+  if (action === 'getData') return Object.assign(getData_(who), { sessionUntil: Number(prop_('S_' + data._s).split('|')[1]) });
   if (action === 'photos') return photos_(who, data.ids || []);   // read-only: no lock needed
 
   const lock = LockService.getScriptLock();
@@ -587,6 +588,7 @@ function api(key, action, data) {
       case 'setSetting':
         if (who.role !== 'owner' && !PARTNER_SETTINGS.includes(data.key)) throw new Error('Only the owner can change this');
         setSetting_(data.key, data.value);
+        if (/^MealVouchers/.test(data.key)) setProp_('ENSURED', '');   // add any new voucher months on the next open
         return true;
       case 'share':
         if (who.role !== 'owner') throw new Error('Only the owner can share');
@@ -840,7 +842,11 @@ function ensureVouchers_() {
 }
 
 function getData_(who) {
-  if (who.role === 'owner') { upgrade_(); ensureSettings_(); ensureVouchers_(); }
+  if (who.role === 'owner') upgrade_();
+  if (who.role === 'owner' && prop_('ENSURED') !== iso_(new Date())) {   // once a day is enough, and keeps opening quick
+    ensureSettings_(); ensureVouchers_();
+    setProp_('ENSURED', iso_(new Date()));
+  }
   const s = settings_();
   const out = {
     role: who.role,
