@@ -568,7 +568,7 @@ function api(key, action, data) {
         if (PERSONAL_TABS.includes(data.tab)) checkHobby_(data.tab, who, data.values, 0);
         if (data.tab === 'ProjectLog' && data.values._photo) Object.assign(data.values, savePhoto_(data.values));
         const row = append_(data.tab, data.values);
-        if (data.tab === 'Dates') syncRow_(row);
+        if (data.tab === 'Dates') queueSync_(row);
         return row;
       case 'updateRow':
         checkTab_(data.tab, who, data.values);
@@ -578,7 +578,7 @@ function api(key, action, data) {
         }
         if (PERSONAL_TABS.includes(data.tab)) checkHobby_(data.tab, who, data.values, data.row);
         update_(data.tab, data.row, data.values);
-        if (data.tab === 'Dates') syncRow_(data.row);
+        if (data.tab === 'Dates') queueSync_(data.row);
         return true;
       case 'markDone': return markDone_(data.row, who);
       case 'tagTrip': return tagTrip_(who, data.trip, data.add || [], data.remove || []);
@@ -841,12 +841,13 @@ function ensureVouchers_() {
 
 function getData_(who) {
   if (who.role === 'owner') { upgrade_(); ensureSettings_(); ensureVouchers_(); }
+  const s = settings_();
   const out = {
     role: who.role,
     canPrivate: who.canPrivate,
     privateUntil: who.until,
-    settings: settings_(),
-    me: (settings_()[who.role === 'owner' ? 'OwnerName' : 'PartnerName']) || '',
+    settings: s,
+    me: s[who.role === 'owner' ? 'OwnerName' : 'PartnerName'] || '',
     dates: read_('Dates').filter(r => who.canPrivate || r.Private !== 'yes'),
     categories: read_('Categories'),
     transactions: read_('Transactions'),
@@ -895,7 +896,7 @@ function markDone_(row, who) {
     values.Due = iso_(next);
   }
   update_('Dates', row, values);
-  syncRow_(row);
+  queueSync_(row);
   return values;
 }
 
@@ -1003,6 +1004,25 @@ function parseAnyDate_(s) {
 function syncCalendar() {
   read_('Dates').forEach(r => syncOne_(r));
 }
+// The phone should not wait for Google Calendar (slow): remember which rows changed and
+// sync them a minute later in the background. The daily syncCalendar is the safety net.
+function queueSync_(row) {
+  const q = JSON.parse(prop_('CAL_QUEUE') || '[]');
+  if (!q.includes(row)) q.push(row);
+  setProp_('CAL_QUEUE', JSON.stringify(q));
+  if (Date.now() - Number(prop_('CAL_QUEUE_AT') || 0) < 10 * 60000) return;   // a background sync is already planned
+  setProp_('CAL_QUEUE_AT', String(Date.now()));
+  ScriptApp.newTrigger('syncQueued').timeBased().after(60 * 1000).create();
+}
+function syncQueued() {
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'syncQueued').forEach(t => ScriptApp.deleteTrigger(t));
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  let q;
+  try { q = JSON.parse(prop_('CAL_QUEUE') || '[]'); setProp_('CAL_QUEUE', '[]'); setProp_('CAL_QUEUE_AT', '0'); } finally { lock.releaseLock(); }
+  const rows = read_('Dates');
+  q.forEach(n => { const r = rows.find(x => x._row === n); if (r) syncOne_(r); });
+}
 function syncRow_(row) {
   const r = read_('Dates').find(x => x._row === row);
   if (r) syncOne_(r);
@@ -1065,7 +1085,8 @@ function sendWeeklySummary() {
 }
 
 // ---------- Sheet helpers ----------
-function ss_() { return SpreadsheetApp.openById(prop_('SHEET_ID') || SHEET_ID); }
+let SS_ = null;   // opening the spreadsheet is slow, so do it once per request
+function ss_() { return SS_ || (SS_ = SpreadsheetApp.openById(prop_('SHEET_ID') || SHEET_ID)); }
 function sheet_(name) { return ss_().getSheetByName(name); }
 function prop_(k) { return PropertiesService.getScriptProperties().getProperty(k); }
 function newKey_() { return (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, ''); }
@@ -1093,11 +1114,14 @@ function append_(name, obj) {
 
 function update_(name, row, obj) {
   const sh = sheet_(name);
-  const head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  const n = sh.getLastColumn(), head = sh.getRange(1, 1, 1, n).getValues()[0].map(String);
+  const rng = sh.getRange(row, 1, 1, n), v = rng.getValues()[0];   // one read and one write instead of one per cell
+  let changed = false;
   Object.keys(obj).forEach(k => {
     const j = head.indexOf(k);
-    if (j >= 0) sh.getRange(row, j + 1).setValue(toCell_(k, obj[k]));
+    if (j >= 0) { v[j] = toCell_(k, obj[k]); changed = true; }
   });
+  if (changed) rng.setValues([v]);
 }
 
 function toCell_(h, v) {

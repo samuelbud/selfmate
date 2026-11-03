@@ -284,7 +284,9 @@ async function load() {
     const st = await call('pinStatus');
     if (!st.valid) return lockScreen(st);
   }
-  D = await call('getData');
+  const seq = SEQ, d = await call('getData');
+  if (seq !== SEQ) return;   // a newer change happened meanwhile: its own reload will show it
+  D = d;
   render();
   if (!WX) loadWeather();
 }
@@ -323,7 +325,40 @@ async function lockNow() {
   saveSession('');
   lockScreen({ hasPin: true, role: D && D.role });
 }
-async function act(action, data, msg) { closeModal(); await call(action, data); if (msg) toast(msg); await load(); }
+// Saves show at once: change the copy on the phone, then tell the Sheet in the background and quietly reload.
+let SEQ = 0, TMP = 0;
+async function act(action, data, msg) {
+  if (data && data.row < 0) return toast('Still saving, try again in a second');
+  closeModal();
+  const my = ++SEQ, tmp = applyLocal(action, data);
+  if (tmp !== false) { render(); if (msg) toast(msg); }
+  try {
+    const res = await call(action, data);
+    if (tmp && typeof res === 'number') tmp._row = res;
+    if (tmp === false && msg) toast(msg);
+  } catch (e) { SEQ++; await load(); return; }   // failed: show what is really stored
+  if (my === SEQ) await load();
+}
+// Returns the new row (addRow), true when the change was shown, false when only the Sheet can work it out.
+function applyLocal(action, d) {
+  const list = d.tab && D[d.tab.toLowerCase()];
+  if (action === 'addRow' && Array.isArray(list)) { const r = Object.assign({ _row: --TMP, Owner: D.role }, d.values); list.push(r); return r; }
+  if (action === 'updateRow' && Array.isArray(list)) { const r = list.find(x => x._row === d.row); if (r) Object.assign(r, d.values); return true; }
+  if (action === 'deleteRow' && Array.isArray(list)) { D[d.tab.toLowerCase()] = list.filter(x => x._row !== d.row); return true; }
+  if (action === 'markDone') {
+    const r = D.dates.find(x => x._row === d.row), t = todayISO();
+    if (!r) return false;
+    r.LastDone = t;
+    if (+r.RepeatMonths && r.Due) { let n = r.Due; do { n = addMonthsISO(n, +r.RepeatMonths); } while (n <= t); r.Due = n; }
+    return true;
+  }
+  return false;
+}
+function addMonthsISO(iso, n) {
+  const [y, m, day] = iso.split('-').map(Number), last = new Date(y, m - 1 + n + 1, 0).getDate();
+  const x = new Date(y, m - 1 + n, Math.min(day, last));
+  return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0');
+}
 const add = (tab, values, msg) => act('addRow', { tab, values }, msg || 'Saved ✓');
 const upd = (tab, row, values, msg) => act('updateRow', { tab, row, values }, msg);
 let toastTimer = 0;   // problems (⚠️) stay longer, so there is time to read them
