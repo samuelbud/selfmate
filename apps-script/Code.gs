@@ -18,7 +18,8 @@
 const TABS = {
   Settings:     ['Key', 'Value', 'Notes'],
   Dates:        ['Title', 'Area', 'Due', 'RepeatMonths', 'Cost', 'Private', 'LastDone', 'Notes', 'EventId'],
-  Categories:   ['Group', 'Category', 'Emoji', 'Type', 'MonthlyTarget'],
+  // Tag (optional) = what the insights treat it as: travel | treat (small everyday treats: coffee, eating out) | subscription
+  Categories:   ['Group', 'Category', 'Emoji', 'Type', 'MonthlyTarget', 'Tag'],
   Rules:        ['Match', 'Category'],
   // Trip = the trip this payment belongs to (flights, hotels, everything paid while away)
   Transactions: ['Date', 'Amount', 'Currency', 'Merchant', 'Category', 'Account', 'Source', 'Note', 'Hash', 'Person', 'Trip'],
@@ -56,6 +57,14 @@ const DELETABLE_TABS = ['Goals', 'Balances', 'ProjectLog', 'Countries', 'TripIte
 const BIG_PROJECT_TOOLS = 'time,money,journal,distance,tasks,parts';
 const DATE_COLS = ['Due', 'LastDone', 'Date', 'Started', 'PaidOn', 'Start', 'End', 'Updated'];
 const PARTNER_SETTINGS = ['LastCheckin'];
+// What identifies a row, per tab. Rows are addressed by their Sheet row number, which shifts when a row above is
+// deleted; before changing a row the server checks these columns still match what the phone saw (see rowFor_).
+const ROW_KEYS = {
+  Dates: ['Title'], Transactions: ['Date', 'Amount', 'Merchant', 'Hash'], Goals: ['Goal'], Categories: ['Category'],
+  Rules: ['Match'], Trips: ['Trip'], TripItems: ['Trip', 'Type', 'Title'], Balances: ['Name'], Invoices: ['Number'],
+  SrlMonths: ['Month'], SrlCosts: ['Date', 'Amount', 'Item'], Projects: ['Project', 'Owner'], Tasks: ['Project', 'Task'],
+  Items: ['Project', 'Item'], ProjectLog: ['Date', 'Project', 'Type', 'Note'], Countries: ['Country', 'Owner'],
+};
 
 // ---------- Starter data (edit freely in the Sheet afterwards) ----------
 const SEED = {
@@ -124,8 +133,8 @@ const SEED = {
     ['🏠 Home', 'Utilities & bills', '💡', 'fixed', 0],
     ['🏠 Home', 'Home & household', '🧴', 'flex', 0],
     ['🍽 Food', 'Groceries', '🛒', 'flex', 0],
-    ['🍽 Food', 'Eating out', '🍕', 'flex', 0],
-    ['🍽 Food', 'Coffee', '☕', 'flex', 0],
+    ['🍽 Food', 'Eating out', '🍕', 'flex', 0, 'treat'],
+    ['🍽 Food', 'Coffee', '☕', 'flex', 0, 'treat'],
     ['🚗 Transport', 'Fuel', '⛽', 'flex', 0],
     ['🚗 Transport', 'Car costs', '🚗', 'pot', 0],
     ['🚗 Transport', 'Public transport & taxi', '🚕', 'flex', 0],
@@ -133,8 +142,8 @@ const SEED = {
     ['❤️ Health & people', 'Gifts', '🎁', 'flex', 0],
     ['🎉 Fun', 'Going out', '🎉', 'flex', 0],
     ['🎉 Fun', 'Sport & hobbies', '🏃', 'flex', 0],
-    ['🎉 Fun', 'Travel', '✈️', 'flex', 0],
-    ['🎉 Fun', 'Subscriptions', '📺', 'fixed', 0],
+    ['🎉 Fun', 'Travel', '✈️', 'flex', 0, 'travel'],
+    ['🎉 Fun', 'Subscriptions', '📺', 'fixed', 0, 'subscription'],
     ['👤 Personal', 'Personal: me', '👤', 'flex', 0],
     ['👤 Personal', 'Personal: partner', '👤', 'flex', 0],
     ['💰 Money', 'Savings', '💰', 'savings', 0],
@@ -278,7 +287,7 @@ function imports_() {
 }
 
 function upgrade_() {
-  if (prop_('SCHEMA') === '7' && imports_().every(h => prop_('IMPORTED_' + h.id))) return;
+  if (prop_('SCHEMA') === '8' && imports_().every(h => prop_('IMPORTED_' + h.id))) return;
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -307,6 +316,12 @@ function upgrade_() {
     if (prop_('SCHEMA') < '7') {          // v2.7: old trips with only a month or a year
       ensureTabs_(ss_());
       setProp_('SCHEMA', '7');
+    }
+    if (prop_('SCHEMA') < '8') {          // v2.8: insights find categories by their Tag, not by their name
+      ensureTabs_(ss_());
+      const TAG = { 'Travel': 'travel', 'Coffee': 'treat', 'Eating out': 'treat', 'Subscriptions': 'subscription' };
+      read_('Categories').filter(c => !c.Tag && TAG[c.Category]).forEach(c => update_('Categories', c._row, { Tag: TAG[c.Category] }));
+      setProp_('SCHEMA', '8');
     }
     imports_().filter(h => !prop_('IMPORTED_' + h.id)).forEach(h => {
       appendRows_('Transactions', h.transactions);
@@ -563,6 +578,7 @@ function api(key, action, data) {
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
+    if (data._was) remap_(action, data);
     switch (action) {
       case 'addRow':
         checkTab_(data.tab, who, data.values);
@@ -631,6 +647,25 @@ function api(key, action, data) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// The phone says what each row looked like when it loaded (_was, by row number). If a row was deleted or
+// added above it since, the number now points somewhere else: find the row by its contents, or refuse.
+function remap_(action, data) {
+  const tab = action === 'markDone' ? 'Dates' : ['answer', 'tagTrip'].includes(action) ? 'Transactions' : data.tab;
+  if (!ROW_KEYS[tab]) return;
+  const rows = read_(tab), fix = n => rowFor_(tab, n, data._was[n], rows);
+  if (data.row) data.row = fix(data.row);
+  ['add', 'remove'].forEach(k => { if (Array.isArray(data[k])) data[k] = data[k].map(fix); });
+}
+function rowFor_(tab, row, was, rows) {
+  if (!was) return row;
+  const same = r => ROW_KEYS[tab].every(k => String(r[k] == null ? '' : r[k]) === String(was[k] == null ? '' : was[k]));
+  const here = rows.find(r => r._row === row);
+  if (here && same(here)) return row;
+  const hits = rows.filter(same);
+  if (hits.length === 1) return hits[0]._row;
+  throw new Error('This was changed somewhere else in the meantime. Showing the latest now, please try again.');
 }
 
 function auth_(key) {
@@ -921,7 +956,15 @@ function import_(text, account, person) {
     desc: col(/(description|descriere|detalii|explica|beneficiar)/i),
     fee: col(/^fee$/i), state: col(/^state$/i), cur: col(/^(currency|valuta|moneda|monedă)/i), type: col(/^type$/i),
   };
-  const existing = new Set(read_('Transactions').map(t => t.Hash));
+  // Duplicates: a payment is already there when the Sheet has as many payments with the same day, amount,
+  // currency and account as this file has so far. Counting (not just "is there one?") keeps two equal coffees
+  // on the same day, and the merchant is left out because PDF and CSV exports spell it differently.
+  const acct = account || 'Bank', key = (d, a, cur) => [d, Number(a).toFixed(2), cur, acct].join('|');
+  const have = {}, seen = {}, hashes = new Set();
+  read_('Transactions').forEach(t => {
+    hashes.add(t.Hash);
+    if (t.Account === acct) { const k = key(t.Date, t.Amount, t.Currency || 'RON'); have[k] = (have[k] || 0) + 1; }
+  });
   const rules = rules_();
   const out = [];
   let skipped = 0;
@@ -934,14 +977,16 @@ function import_(text, account, person) {
     if (!date || !amount || isNaN(amount)) return;
     const merchant = cleanMerchant_(c.desc >= 0 ? r[c.desc] : '');
     const currency = (c.cur >= 0 && r[c.cur]) ? String(r[c.cur]).toUpperCase().replace('LEI', 'RON') : 'RON';
-    const hash = [date, amount.toFixed(2), currency, merchant].join('|');
-    if (existing.has(hash)) { skipped++; return; }
-    existing.add(hash);
+    const k = key(date, amount, currency), n = seen[k] = (seen[k] || 0) + 1;
+    if (n <= (have[k] || 0)) { skipped++; return; }
+    let hash = [date, amount.toFixed(2), currency, merchant].join('|');
+    for (let i = 2; hashes.has(hash); i++) hash = [date, amount.toFixed(2), currency, merchant, i].join('|');
+    hashes.add(hash);
     let cat = categorize_(merchant, rules);
     if (!cat && c.type >= 0 && /top.?up|exchange|transfer/i.test(r[c.type])) cat = 'Transfers';
     if (!cat) cat = amount > 0 ? 'Income' : 'Unsorted';
     out.push({ Date: date, Amount: Math.round(amount * 100) / 100, Currency: currency, Merchant: merchant,
-               Category: cat, Account: account || 'Bank', Source: 'import', Hash: hash, Person: person || 'S' });
+               Category: cat, Account: acct, Source: 'import', Hash: hash, Person: person || 'S' });
   });
   appendRows_('Transactions', out.map(o => TABS.Transactions.map(h => o[h])));
   return { added: out.length, skipped: skipped, unsorted: out.filter(o => o.Category === 'Unsorted').length };

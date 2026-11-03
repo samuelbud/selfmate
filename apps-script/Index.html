@@ -258,6 +258,36 @@ const sum = (a, f) => a.reduce((s, x) => s + (+f(x) || 0), 0);
 const yes = v => v === true || String(v).toLowerCase() === 'yes';
 const catOf = name => D.categories.find(c => c.Category === name) || { Type: 'flex', Emoji: '•', Group: 'Other' };
 const ron = t => !t.Currency || t.Currency === 'RON';
+// Lei per unit of another currency: EUR from ⚙️, others from the OtherRates setting ("GBP 5.86, USD 4.40").
+function rateOf(cur) {
+  cur = String(cur || 'RON').toUpperCase();
+  if (cur === 'RON') return 1;
+  if (cur === 'EUR') return eur();
+  const m = String(D.settings.OtherRates || '').toUpperCase().match(new RegExp('\b' + cur + '\s*[=:]?\s*([\d.,]+)'));
+  return m ? +m[1].replace(',', '.') || 0 : 0;
+}
+// Payments in another currency count in lei everywhere (totals, insights, trips). The original stays in _orig
+// for display and for telling the server which row this is. Without a rate they stay out of the totals.
+function prepare(d) {
+  const keep = D; D = d;
+  d.transactions.forEach(t => {
+    if (ron(t) || t._orig) return;
+    const r = rateOf(t.Currency);
+    if (!r) return;
+    t._orig = { Amount: t.Amount, Currency: t.Currency };
+    t.Amount = Math.round(t.Amount * r * 100) / 100; t.Currency = 'RON';
+  });
+  D = keep;
+  return d;
+}
+// How far the bank data goes, per account (manual and meal-voucher rows don't count).
+function dataUpTo() {
+  const last = {};
+  D.transactions.filter(t => !['manual', 'vouchers'].includes(t.Source) && t.Account && t.Date)
+    .forEach(t => { if (!last[t.Account] || t.Date > last[t.Account]) last[t.Account] = t.Date; });
+  const list = Object.entries(last).filter(x => days(x[1]) > -120).sort((a, b) => a[1] < b[1] ? -1 : 1);
+  return { list, oldest: list.length ? list[0][1] : '' };
+}
 const rep = n => ({ 1: 'month', 3: '3 months', 6: '6 months', 12: 'year', 24: '2 years' }[n] || n + ' months');
 
 // ---------- PIN session (remembered on this phone only) ----------
@@ -285,10 +315,21 @@ function savedCopy() {
   } catch (e) { return null; }
 }
 const ROW_EDITS = ['updateRow', 'deleteRow', 'markDone', 'answer', 'tagTrip'];
+// Tell the server what each row looked like here, so it can find it again if rows moved in the Sheet meanwhile.
+function withWas(action, data) {
+  if (!ROW_EDITS.includes(action) || !data || data._was || !D) return data;
+  const tab = action === 'markDone' ? 'Dates' : ['answer', 'tagTrip'].includes(action) ? 'Transactions' : data.tab;
+  const list = D[String(tab).toLowerCase()] || [], was = {};
+  [data.row].concat(data.add || [], data.remove || []).filter(n => n > 0).forEach(n => {
+    const r = list.find(x => x._row === n);
+    if (r) { was[n] = Object.assign({}, r, r._orig || {}); delete was[n]._orig; }
+  });
+  return Object.assign({}, data, { _was: was });
+}
 
 function call(action, data) {
   if (STALE && ROW_EDITS.includes(action)) { toast('Getting the latest data, try again in a second'); return Promise.reject(new Error('stale')); }
-  const payload = Object.assign({}, data || {}, { _s: SESSION });
+  const payload = Object.assign({}, withWas(action, data) || {}, { _s: SESSION });
   return new Promise((res, rej) => {
     if (window.google && google.script && google.script.run) {
       google.script.run.withSuccessHandler(res).withFailureHandler(e => {
@@ -304,11 +345,11 @@ async function load() {
     const st = await call('pinStatus');
     if (!st.valid) return lockScreen(st);
   }
-  if (!D && SESSION && (D = savedCopy())) { STALE = true; render(); }
+  if (!D && SESSION && (D = savedCopy())) { prepare(D); STALE = true; render(); }
   const seq = SEQ, d = await call('getData').catch(() => null);
   if (!d || seq !== SEQ) return;   // locked, or a newer change happened meanwhile: its own reload will show it
-  D = d; STALE = false;
   saveCopy(d);
+  D = prepare(d); STALE = false;
   render();
   if (!WX) loadWeather();
 }
@@ -352,6 +393,7 @@ let SEQ = 0, TMP = 0;
 async function act(action, data, msg) {
   if (data && data.row < 0) return toast('Still saving, try again in a second');
   closeModal();
+  data = withWas(action, data);   // before the change is shown here
   const my = ++SEQ, tmp = applyLocal(action, data);
   if (tmp !== false) { render(); if (msg) toast(msg); }
   try {
@@ -609,6 +651,19 @@ async function checkIn() {
   if (STALE) load();
 }
 
+// The weekly number is only as good as the last import: say how far the bank data goes.
+function freshness() {
+  const f = dataUpTo();
+  if (!f.oldest) return '';
+  const short = iso => new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const each = f.list.map(x => `${esc(x[0])} ${short(x[1])}`).join(', ');
+  const behind = -days(f.oldest);
+  const nForeign = D.transactions.filter(t => !ron(t)).length;
+  return (behind > 7
+    ? `<button class="alert soft" onclick="go('money');importModal()">📥 Bank data only goes up to ${short(f.oldest)} (${behind} days ago), so this week's number is missing payments. Tap to import a statement.</button>`
+    : `<div class="muted small">Bank data up to: ${each}.</div>`)
+    + (nForeign ? `<div class="muted small">${nForeign} payment${nForeign > 1 ? 's' : ''} in another currency ${nForeign > 1 ? 'are' : 'is'} not counted yet: add the rate in ⚙️ Customise.</div>` : '');
+}
 function viewHome() {
   const s = safeToSpend();
   const upcoming = D.dates.filter(d => d.Due && !isDone(d) && days(d.Due) <= 45).sort((a, b) => a.Due < b.Due ? -1 : 1);
@@ -627,7 +682,7 @@ function viewHome() {
         ? `<p class="spend">This week you can still spend <b>${lei(s.left)}</b></p>`
         : `<p class="spend">This week you are over by <b>${lei(-s.left)}</b></p>`) +
         `<div class="meter ${s.pct < .1 ? 'out' : s.pct < .4 ? 'low' : ''}"><i style="width:${fill}%"></i></div>
-         <div class="muted small">${lei(s.spent)} spent of about ${lei(s.weekly)}. Resets on Monday.</div>`
+         <div class="muted small">${lei(s.spent)} spent of about ${lei(s.weekly)}. Resets on Monday.</div>` + freshness()
       : `<button class="alert soft" onclick="openSettings()">Add your monthly income in ⚙️ to see what you can spend each week</button>`}
     ${uns ? `<button class="alert" onclick="go('money')">❓ ${uns} transaction${uns > 1 ? 's need' : ' needs'} a category. Tap to sort them.</button>` : ''}
     <h2>Coming up</h2>
@@ -783,7 +838,7 @@ function txRow(t) {
   const c = catOf(t.Category);
   return `<div class="row" onclick="txModal(${t._row})"><span class="emo">${c.Emoji}</span>
     <div class="grow"><div>${esc(t.Merchant || t.Note || t.Category)}</div><div class="muted small">${fmt(t.Date)}, ${esc(t.Category)}, ${esc(t.Account)}</div></div>
-    <b style="color:${+t.Amount > 0 ? 'var(--good)' : 'inherit'}">${(+t.Amount > 0 ? '+' : '') + (+t.Amount).toLocaleString('ro-RO')} ${t.Currency && t.Currency !== 'RON' ? esc(t.Currency) : ''}</b></div>`;
+    <b style="color:${+t.Amount > 0 ? 'var(--good)' : 'inherit'}">${(+t.Amount > 0 ? '+' : '') + (+t.Amount).toLocaleString('ro-RO')} ${t.Currency && t.Currency !== 'RON' ? esc(t.Currency) : ''}${t._orig ? `<div class="muted small">${(+t._orig.Amount).toLocaleString('ro-RO')} ${esc(t._orig.Currency)}</div>` : ''}</b></div>`;
 }
 function guessKeyword(m) {
   return (String(m).toUpperCase().split(/[^A-Z0-9.&]+/).find(w => w.length >= 3 && !/^(SRL|SA|RO|THE|PLATA|CARD|POS)$/.test(w)) || '');
@@ -1024,7 +1079,7 @@ function findTripPayments(name) {
   const end = t.Approx === 'year' ? y + '-12-31' : t.Approx === 'month' ? new Date(+y, +m.slice(5), 0, 12).toISOString().slice(0, 10) : t.End || t.Start, shift = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
   const skip = ['Income', 'Transfers', 'Savings'];
   const cand = D.transactions.filter(x => (!x.Trip || x.Trip === name) && !skip.includes(x.Category) && (+x.Amount < 0 || x.Trip === name) && (
-    (x.Date >= t.Start && x.Date <= shift(end, 4)) || (x.Date >= shift(t.Start, -180) && x.Date < t.Start && (x.Category === 'Travel' || x.Trip === name))))
+    (x.Date >= t.Start && x.Date <= shift(end, 4)) || (x.Date >= shift(t.Start, -180) && x.Date < t.Start && (catOf(x.Category).Tag === 'travel' || x.Trip === name))))
     .sort((a, b) => a.Date < b.Date ? -1 : 1);
   window._ft = { name, rows: cand.map(x => x._row) };
   openModal(`<h3>Payments for ${esc(name)}</h3><p class="muted small">Ticked: paid during the trip. Unticked: travel payments from the months before. Check what belongs here.</p>
@@ -1552,20 +1607,22 @@ function viewHobby(p) {
 
 // ---------- log a session (only the fields this hobby uses) ----------
 let PENDING = null;   // the photo picked in the form, already shrunk on the phone
-function logModal(row) {
-  const p = D.projects.find(x => x._row === row);
+// With `entry` (a ProjectLog row) the same form edits that session; its photo stays as it is.
+function logModal(row, entry) {
+  const p = D.projects.find(x => x._row === row), l = entry ? D.projectlog.find(x => x._row === entry) : {};
   PENDING = null;
-  const f = (id, lab, extra) => `<div style="flex:1;min-width:0"><label>${lab}</label><input id="${id}" type="number" inputmode="decimal" ${extra || ''}></div>`;
-  const nums = [has(p, 'time') ? f('lh', 'Hours', 'step="0.25" placeholder="1.5"') : '', has(p, 'distance') ? f('lk', 'Kilometres') : '',
-                has(p, 'count') ? f('lq', esc(p.CountName || 'How many')) : '', has(p, 'money') ? f('lc', 'Spent (lei)') : ''].filter(Boolean);
-  openModal(`<h3>${esc(p.Emoji)} ${esc(p.Project)}</h3>
-    <label>Date</label><input id="ld" type="date" value="${todayISO()}">
+  const n = v => +v ? num1(v) : '';
+  const f = (id, lab, v, extra) => `<div style="flex:1;min-width:0"><label>${lab}</label><input id="${id}" type="number" inputmode="decimal" value="${v}" ${extra || ''}></div>`;
+  const nums = [has(p, 'time') || +l.Hours ? f('lh', 'Hours', n(l.Hours), 'step="0.25" placeholder="1.5"') : '', has(p, 'distance') || +l.Km ? f('lk', 'Kilometres', n(l.Km)) : '',
+                has(p, 'count') || +l.Count ? f('lq', esc(p.CountName || 'How many'), n(l.Count)) : '', has(p, 'money') || +l.Cost ? f('lc', 'Spent (lei)', n(l.Cost)) : ''].filter(Boolean);
+  openModal(`<h3>${esc(p.Emoji)} ${esc(p.Project)}${entry ? ': edit' : ''}</h3>
+    <label>Date</label><input id="ld" type="date" value="${esc(l.Date || todayISO())}">
     ${nums.length ? `<div class="inline" style="flex-wrap:wrap">${nums.join('')}</div>` : ''}
     <label>${has(p, 'journal') ? 'What did you do? How did it go?' : 'Note'}</label>
-    ${has(p, 'journal') ? '<textarea id="ln" rows="3"></textarea>' : '<input id="ln">'}
-    ${has(p, 'journal') ? `<label>Photo (optional)</label><label class="photo-pick" for="lphoto"><span id="lprev">📷 Take or choose a photo</span></label>
+    ${has(p, 'journal') ? `<textarea id="ln" rows="3">${esc(l.Note || '')}</textarea>` : `<input id="ln" value="${esc(l.Note || '')}">`}
+    ${has(p, 'journal') && !entry ? `<label>Photo (optional)</label><label class="photo-pick" for="lphoto"><span id="lprev">📷 Take or choose a photo</span></label>
       <input id="lphoto" type="file" accept="image/*" style="display:none" onchange="pickPhoto(this)">` : ''}
-    <div class="btns"><button class="btn" id="lsave" onclick="saveLog(${row})">Save</button></div>`);
+    <div class="btns"><button class="btn" id="lsave" onclick="saveLog(${row}${entry ? ', ' + entry : ''})">Save</button></div>`);
 }
 // Shrink on the phone before sending: a large copy (1600 px) to keep, and a small one (400 px) for the timeline.
 function shrink(img, max, q) {
@@ -1586,11 +1643,13 @@ function pickPhoto(input) {
   img.onerror = () => toast('⚠️ This photo type cannot be read. Try a JPG or PNG.');
   img.src = url;
 }
-function saveLog(row) {
+function saveLog(row, entry) {
   const p = D.projects.find(x => x._row === row);
   const v = { Date: val('ld') || todayISO(), Project: p.Project, Type: 'Session', Hours: +val('lh') || '', Km: +val('lk') || '',
               Count: +val('lq') || '', Cost: +val('lc') || '', Note: val('ln') };
-  if (!v.Hours && !v.Km && !v.Count && !v.Cost && !v.Note && !PENDING) return toast('Write something first');
+  const l = entry && D.projectlog.find(x => x._row === entry);
+  if (!v.Hours && !v.Km && !v.Count && !v.Cost && !v.Note && !PENDING && !(l && l.Photo)) return toast('Write something first');
+  if (entry) { delete v.Type; return upd('ProjectLog', entry, v, 'Saved ✓'); }
   if (PENDING) { v._photo = PENDING.photo; v._thumb = PENDING.thumb; }
   // keep the form open until Google has saved it, so you can see it working (and try again if it fails)
   const btn = $('#lsave'); btn.disabled = true; btn.textContent = PENDING ? 'Saving the photo… (a few seconds)' : 'Saving…';
@@ -1605,7 +1664,8 @@ function entryModal(row) {
     ${l.Photo ? `<img class="full" data-phf="${esc(l.Photo)}" alt="Photo from ${fmt(l.Date)}">` : ''}
     ${l.Note ? `<p style="white-space:pre-wrap">${esc(l.Note)}</p>` : ''}
     ${bits.length ? `<p class="muted">${bits.join(' · ')}</p>` : ''}
-    ${l._ro ? '' : `<div class="btns"><button class="btn ghost" onclick="if(confirm('Delete this entry${l.Photo ? ' and its photo' : ''}?'))act('deleteRow',{tab:'ProjectLog',row:${row}},'Deleted')">Delete</button></div>
+    ${l._ro ? '' : `<div class="btns"><button class="btn ghost" onclick="if(confirm('Delete this entry${l.Photo ? ' and its photo' : ''}?'))act('deleteRow',{tab:'ProjectLog',row:${row}},'Deleted')">Delete</button>
+      ${p._row ? `<button class="btn" onclick="logModal(${p._row}, ${row})">Edit</button>` : ''}</div>
       ${l.Photo ? '<p class="muted small">The photo moves to your Google Drive bin, where you can restore it for 30 days.</p>' : ''}`}`);
 }
 
@@ -1632,9 +1692,10 @@ function hobbyModal(row) {
     <div class="inline"><div style="flex:3;min-width:0"><label>Name</label><input id="hn" value="${esc(p.Project)}" ${row ? 'disabled' : 'placeholder="e.g. Sourdough baking"'}></div>
       <div style="flex:1;min-width:0"><label>Emoji</label><input id="he" value="${esc(p.Emoji)}"></div></div>
     <label>Start from</label>
-    <div class="chips">${PRESETS.map(x => `<button class="chip" onclick="applyPreset('${x[1]}')">${x[0]}</button>`).join('')}</div>
+    <div class="chips" id="presets">${PRESETS.map(x => `<button class="chip" data-tools="${x[1]}" onclick="applyPreset('${x[1]}')">${x[0]}</button>`).join('')}</div>
+    <p class="muted small" style="margin:6px 0 0">Ticks the boxes below for you. Custom clears them so you choose.</p>
     <label>What do you want to track?</label>
-    ${TOOLS.map(t => `<label class="tool"><input type="checkbox" id="tool_${t[0]}" ${on.includes(t[0]) ? 'checked' : ''}>
+    ${TOOLS.map(t => `<label class="tool"><input type="checkbox" id="tool_${t[0]}" onchange="markPreset()" ${on.includes(t[0]) ? 'checked' : ''}>
       <span>${t[1]} <b>${t[2]}</b> <span class="muted small">${t[3]}</span></span></label>`).join('')}
     <label>If you count something: what?</label><input id="hc" value="${esc(p.CountName)}" placeholder="e.g. loaves, songs, rides">
     <label>Budget (lei, optional)</label><input id="hb" type="number" inputmode="decimal" value="${+p.Budget || ''}">
@@ -1643,8 +1704,15 @@ function hobbyModal(row) {
     ${row ? `<label>Status</label><select id="hs">${[['active', 'Active'], ['paused', 'Paused (kept, shown greyed out)']].map(x => `<option value="${x[0]}" ${x[0] === (p.Status || 'active') ? 'selected' : ''}>${x[1]}</option>`).join('')}</select>` : ''}
     <div class="btns"><button class="btn" onclick="saveHobby(${row || 0})">Save</button></div>
     <p class="muted small">You can change the tools any time. Nothing you logged is lost when you switch one off.</p>`);
+  markPreset();
 }
-function applyPreset(tools) { TOOLS.forEach(t => { if (tools) $('#tool_' + t[0]).checked = tools.split(',').includes(t[0]); }); }
+function applyPreset(tools) { TOOLS.forEach(t => $('#tool_' + t[0]).checked = tools.split(',').includes(t[0])); markPreset(tools); }
+// Light up the preset the ticks match (Custom when they match none, or when Custom was just tapped).
+function markPreset(picked) {
+  const now = TOOLS.filter(t => $('#tool_' + t[0]).checked).map(t => t[0]).sort().join(',');
+  const hit = picked === '' ? '' : (PRESETS.find(x => x[1] && x[1].split(',').sort().join(',') === now) || ['', ''])[1];
+  document.querySelectorAll('#presets .chip').forEach(b => b.classList.toggle('on', b.dataset.tools === hit));
+}
 async function saveHobby(row) {
   const tools = TOOLS.filter(t => $('#tool_' + t[0]).checked).map(t => t[0]).join(',');
   if (!tools) return toast('Pick at least one thing to track');
@@ -1945,6 +2013,7 @@ function customiseModal() {
     <label>Hobbies tab name</label><input id="cu4" value="${esc(s.ProjectsName || 'Hobbies')}">
     <label>Weather city</label><select id="cu5">${Object.keys(CITIES).map(c => `<option ${c === city() ? 'selected' : ''}>${c}</option>`).join('')}</select>
     <label>EUR to lei rate</label><input id="cu6" type="number" inputmode="decimal" step="0.01" value="${eur()}">
+    <label>Other currencies (optional, lei for 1 unit)</label><input id="cu7" value="${esc(s.OtherRates || '')}" placeholder="e.g. GBP 5.86, USD 4.40">
     <div class="btns"><button class="btn" onclick="saveNames()">Save names</button></div>
     <h2>Growing savings (goals)</h2>
     ${D.goals.map(g => `<div class="row" onclick="goalModal(${g._row})"><span class="emo">${esc(g.Emoji)}</span><div class="grow"><div>${esc(g.Goal)}</div>
@@ -1960,11 +2029,13 @@ function customiseModal() {
 }
 async function saveNames() {
   const pairs = [['OwnerName', val('cu1')], ['PartnerName', val('cu2')], ['SrlName', val('cu3') || 'SRL'], ['ProjectsName', val('cu4') || 'Hobbies'],
-                 ['City', val('cu5')], ['EurRate', +val('cu6') || 5]];
+                 ['City', val('cu5')], ['EurRate', +val('cu6') || 5], ['OtherRates', val('cu7')]];
   for (const p of pairs) await call('setSetting', { key: p[0], value: p[1] });
   try { sessionStorage.removeItem('sm_wx'); } catch (e) { /* fine */ }
   WX = null; toast('Saved ✓'); await load(); customiseModal();
 }
+const CAT_TAGS = [['', 'Nothing special'], ['travel', 'Travel'], ['treat', 'A small everyday treat (coffee, eating out)'], ['subscription', 'A subscription']];
+const tagged = tag => D.categories.filter(c => c.Tag === tag).map(c => c.Category);
 function categoryModal(row) {
   const c = row ? D.categories.find(x => x._row === row) : { Emoji: '📌', Type: 'flex', Group: '🍽 Food' };
   const groups = [...new Set(D.categories.map(x => x.Group))];
@@ -1976,15 +2047,16 @@ function categoryModal(row) {
       <div style="flex:2"><label>Group</label><input id="cg2" list="cgl" value="${esc(c.Group)}"><datalist id="cgl">${groups.map(g => `<option>${esc(g)}</option>`).join('')}</datalist></div></div>
     <label>Kind</label><select id="ct2">${types.map(t => `<option value="${t[0]}" ${t[0] === c.Type ? 'selected' : ''}>${t[1]}</option>`).join('')}</select>
     <label>Monthly guide (lei, 0 = none)</label><input id="cm" type="number" inputmode="decimal" value="${+c.MonthlyTarget || ''}">
+    <label>Insights treat it as</label><select id="ctg">${CAT_TAGS.map(t => `<option value="${t[0]}" ${t[0] === (c.Tag || '') ? 'selected' : ''}>${t[1]}</option>`).join('')}</select>
     <div class="btns"><button class="btn" onclick="saveCategory(${row || 0})">Save</button></div>
     <p class="muted small">Renaming also updates every past transaction and rule that uses this category.</p>`);
 }
 async function saveCategory(row) {
-  const v = { Emoji: val('ce'), Group: val('cg2'), Type: val('ct2'), MonthlyTarget: +val('cm') || 0 }, name = val('cn');
+  const v = { Emoji: val('ce'), Group: val('cg2'), Type: val('ct2'), MonthlyTarget: +val('cm') || 0, Tag: val('ctg') }, name = val('cn');
   if (!name) return toast('Give it a name');
   if (!row) return add('Categories', Object.assign({ Category: name }, v), 'Category added ✓');
   const old = D.categories.find(x => x._row === row);
-  if (old.Category !== name) await call('renameCategory', { from: old.Category, to: name });
+  if (old.Category !== name) { await call('renameCategory', { from: old.Category, to: name }); old.Category = name; }
   await act('updateRow', { tab: 'Categories', row, values: v }, 'Saved ✓');
 }
 
@@ -2000,7 +2072,9 @@ function insights() {
   const out = [];
   if (!tx.length) return out;
   // 1. travel paid for by extra income
-  const travel = spendOf(t => t.Category === 'Travel');
+  const travelCats = tagged('travel'), treatCats = tagged('treat'), subCats = tagged('subscription');
+  const isTravel = t => travelCats.includes(t.Category) || !!t.Trip;   // a payment linked to a trip is travel too
+  const travel = spendOf(isTravel);
   const byMonthInc = full12.map(m => sum(incomeRows.filter(t => t.Date.startsWith(m)), t => t.Amount)).sort((a, b) => a - b);
   const typical = byMonthInc[Math.floor(byMonthInc.length / 2)] || 0, extra = Math.max(0, income - typical * 12);
   if (travel > totalSpend * .2) out.push({ score: 90, emoji: '✈️', title: `Travel is ${Math.round(travel / totalSpend * 100)}% of your spending`,
@@ -2011,7 +2085,7 @@ function insights() {
   // 2. fastest-growing category (last 3 months vs the 3 before)
   const a6 = lastMonths(6), recent = a6.slice(3), before = a6.slice(0, 3);
   const catTotal = (ms, c) => -sum(D.transactions.filter(t => spendTx(t) && t.Category === c && ms.some(m => t.Date.startsWith(m))), t => t.Amount);
-  const grow = D.categories.filter(c => ['flex', 'fixed'].includes(c.Type) && !(c.Category === 'Travel' && out.length)).map(c => ({ c: c.Category, r: catTotal(recent, c.Category), b: catTotal(before, c.Category) }))
+  const grow = D.categories.filter(c => ['flex', 'fixed'].includes(c.Type) && !(c.Tag === 'travel' && out.length)).map(c => ({ c: c.Category, r: catTotal(recent, c.Category), b: catTotal(before, c.Category) }))
     .filter(x => x.r - x.b > 300 && x.b > 0).sort((x, y) => (y.r - y.b) - (x.r - x.b))[0];
   if (grow) out.push({ score: 70, emoji: '📈', title: `${grow.c} is growing`,
     body: `${lei(grow.r)} in the last 3 months, up from ${lei(grow.b)} in the 3 months before (+${Math.round((grow.r - grow.b) / grow.b * 100)}%).`,
@@ -2019,20 +2093,21 @@ function insights() {
            `If it is planned (a treatment, a renovation), fine: just give it a monthly guide so it stays visible.`,
            `Set a monthly guide for ${grow.c} in Customise. Seeing the number is often enough to bend the curve.`], ask: grow.c.toLowerCase() + ' last 6 months' });
   // 3. small daily habits, yearly
-  const coffee = spendOf(t => t.Category === 'Coffee'), out2 = spendOf(t => t.Category === 'Eating out');
-  const cups = tx.filter(t => t.Category === 'Coffee' && +t.Amount < 0).length, cup = cups ? coffee / cups : 0;
-  if (coffee + out2 > 1500) out.push({ score: 55, emoji: '☕', title: `Coffee and eating out: ${lei(coffee + out2)} a year`,
-    body: `Coffee ${lei(coffee)} and eating out ${lei(out2)} in 12 months, about ${lei((coffee + out2) / 52)} a week. Small amounts add up quietly.`,
-    tips: [`Keep the ones you love. Your average coffee is ${lei(cup)}; swapping one routine coffee a week for one from home is about ${lei(cup * 52)} a year.`,
+  // the treat bought most often (usually coffee) gives the "one a week" example
+  const treats = treatCats.map(c => ({ c, v: spendOf(t => t.Category === c), n: tx.filter(t => t.Category === c && +t.Amount < 0).length })).filter(x => x.v > 0);
+  const treatSum = sum(treats, x => x.v), often = treats.slice().sort((a, b) => b.n - a.n)[0], cup = often && often.n ? often.v / often.n : 0;
+  if (treatSum > 1500) out.push({ score: 55, emoji: '☕', title: `${treats.map(x => x.c).join(' and ')}: ${lei(treatSum)} a year`,
+    body: `${treats.map(x => `${x.c} ${lei(x.v)}`).join(', ')} in 12 months, about ${lei(treatSum / 52)} a week. Small amounts add up quietly.`,
+    tips: [`Keep the ones you love. One ${often.c.toLowerCase()} payment is about ${lei(cup)} on average; skipping one routine purchase a week is about ${lei(cup * 52)} a year.`,
            'Plan 2 eating-out evenings a week together on Sunday, so the rest are a choice, not a default.',
-           'Move what you save into a goal you care about (the travel fund), so it does not just disappear into other spending.'], ask: 'coffee last 12 months' });
+           'Move what you save into a goal you care about (the travel fund), so it does not just disappear into other spending.'], ask: often.c.toLowerCase() + ' last 12 months' });
   // 4. subscriptions
-  const subs = spendOf(t => t.Category === 'Subscriptions');
+  const subs = spendOf(t => subCats.includes(t.Category));
   if (subs > 0) out.push({ score: 40, emoji: '📺', title: `Subscriptions: ${lei(subs)} a year`,
     body: `About ${lei(subs / 12)} a month on recurring services.`,
     tips: ['Once a year (January) cancel anything you did not use last month. It takes 10 minutes.',
            'Share family plans with your partner instead of paying twice.',
-           'Add each subscription as a date with its cost, so the renewal reminds you before it charges.'], ask: 'subscriptions last 12 months' });
+           'Add each subscription as a date with its cost, so the renewal reminds you before it charges.'], ask: (subCats[0] || 'subscriptions').toLowerCase() + ' last 12 months' });
   // 5. share of income kept
   const saved = -sum(tx.filter(t => t.Category === 'Savings'), t => t.Amount);
   if (income > 0) {
@@ -2047,12 +2122,12 @@ function insights() {
                          'Check once a year that savings beyond your 3-month buffer are working for you (interest, bonds).'], ask: 'income last 12 months' });
   }
   // 6. emergency buffer in months of everyday costs (cash + savings balances + the emergency goal)
-  const essentials = spendOf(t => !['Travel', 'Campervan project', 'Savings'].includes(t.Category)) / 12;
+  const essentials = spendOf(t => !isTravel(t)) / 12;   // spendOf already leaves out savings and hobby projects
   const goalBuf = sum(D.goals.filter(g => /emergency|buffer|urgenta/i.test(g.Goal)), g => g.Saved);
   const ready = sum((D.balances || []).filter(b => b.Kind === 'cash' || b.Kind === 'savings'), inLei) + goalBuf;
   if (essentials > 0) { const months = ready / essentials;
     out.push({ score: months < 1 ? 80 : months < 3 ? 60 : 20, emoji: '🛟', title: `Your safety cushion covers ${months.toFixed(1)} months`,
-      body: `Everyday costs (without travel and the campervan) are about ${lei(essentials)} a month. Cash, savings and your emergency goal add up to ${lei(ready)}.`
+      body: `Everyday costs (without travel and hobby projects) are about ${lei(essentials)} a month. Cash, savings and your emergency goal add up to ${lei(ready)}.`
         + ((D.balances || []).every(b => !+b.Amount) ? ' Add your cash and savings in Money → "Your money right now" to make this exact.' : ''),
       tips: months < 3 ? [`Aim for 3 months (${lei(essentials * 3)}). A savings cushion is the strongest sign of financial wellbeing in the CFPB research.`,
                           'Keep it in a separate account or vault, so it is not counted as spending money.',
@@ -2120,14 +2195,16 @@ const MOCK = (() => {
     categories: [
       { _row: 2, Group: '🏠 Home', Category: 'Utilities', Emoji: '💡', Type: 'fixed', MonthlyTarget: 600 },
       { _row: 3, Group: '🍽 Daily life', Category: 'Groceries', Emoji: '🛒', Type: 'flex', MonthlyTarget: 1500 },
-      { _row: 4, Group: '🍽 Daily life', Category: 'Eating out', Emoji: '🍕', Type: 'flex' },
+      { _row: 4, Group: '🍽 Daily life', Category: 'Eating out', Emoji: '🍕', Type: 'flex', Tag: 'treat' },
+      { _row: 9, Group: '🎉 Fun', Category: 'Travel', Emoji: '✈️', Type: 'flex', Tag: 'travel' },
       { _row: 5, Group: '🚗 Transport', Category: 'Fuel', Emoji: '⛽', Type: 'flex' },
-      { Group: '🎉 Fun', Category: 'Subscriptions', Emoji: '📺', Type: 'fixed', MonthlyTarget: 120 },
+      { Group: '🎉 Fun', Category: 'Subscriptions', Emoji: '📺', Type: 'fixed', MonthlyTarget: 120, Tag: 'subscription' },
       { Group: '💰 Money', Category: 'Unsorted', Emoji: '❓', Type: 'flex' },
       { Group: '— System', Category: 'Income', Emoji: '💵', Type: 'income' },
     ],
     transactions: [
       { _row: 2, Date: off(-1), Amount: -186.4, Currency: 'RON', Merchant: 'KAUFLAND BUCURESTI', Category: 'Groceries', Account: 'Banca Transilvania' },
+      { _row: 40, Date: off(-1), Amount: -20, Currency: 'EUR', Merchant: 'AMAZON.DE', Category: 'Other', Account: 'Revolut' },
       { _row: 3, Date: off(-2), Amount: -62, Currency: 'RON', Merchant: 'GLOVO', Category: 'Eating out', Account: 'Revolut' },
       { _row: 4, Date: off(-3), Amount: -250, Currency: 'RON', Merchant: 'OMV PETROM', Category: 'Fuel', Account: 'Banca Transilvania' },
       { _row: 5, Date: off(-4), Amount: -89, Currency: 'RON', Merchant: 'ALTEX ROMANIA SRL', Category: 'Unsorted', Account: 'Banca Transilvania' },
