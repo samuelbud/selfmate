@@ -64,7 +64,7 @@
   .ring .track { fill: none; stroke: var(--line); stroke-width: 9; }
   .ring .fill { fill: none; stroke-width: 9; stroke-linecap: round; transition: stroke-dasharray .6s; }
   .ring text { font-family: "Young Serif", serif; font-size: 17px; fill: var(--ink); }
-  .cols { display: flex; align-items: flex-end; gap: 6px; height: 120px; padding-top: 8px; }
+  .cols { display: flex; align-items: flex-end; gap: 6px; min-height: 120px; padding-top: 8px; }   /* grows with its labels, so a full bar never reaches the title */
   .cols div { flex: 1; min-width: 0; text-align: center; font-size: 11px; color: var(--muted); }
   .cols div { overflow-wrap: normal; white-space: nowrap; }
   .cols.dense { gap: 2px; } .cols.dense div { font-size: 10px; overflow: visible; } .cols.dense b { border-radius: 4px 4px 1px 1px; }
@@ -538,7 +538,7 @@ function catModal(cat) {
   const hmax = Math.max(1, ...hist.map(h => h.v));
   openModal(`<h3>${c.Emoji} ${esc(cat)}</h3>
     <div class="card"><div class="cols">${hist.map(h => `<div><b style="height:${h.v / hmax * 90}px"></b>
-      ${new Date(h.m + '-01T00:00:00').toLocaleDateString('en-GB', { month: 'short' })}<br>${h.v ? Math.round(h.v) : ''}</div>`).join('')}</div></div>
+      ${new Date(h.m + '-01T00:00:00').toLocaleDateString('en-GB', { month: 'short' })}<br>${h.v ? Math.round(h.v) : '&nbsp;'}</div>`).join('')}</div></div>
     ${c._row ? `<label>Monthly guide amount (lei, optional, 0 = none)</label>
       <div class="inline"><input id="cg" type="number" inputmode="decimal" value="${+c.MonthlyTarget || ''}">
       <button class="btn" onclick="upd('Categories',${c._row},{MonthlyTarget:+val('cg')||0},'Saved ✓')">Save</button></div>` : ''}
@@ -1588,7 +1588,7 @@ const periodChips = () => `<div class="chips">${[3, 6, 12].map(n => `<button cla
 function stackChart(series, months, unit) {
   const tot = months.map((m, i) => sum(series, s => s.vals[i])), max = Math.max(1e-9, ...tot);
   return `<div class="cols">${months.map((m, i) => `<div><span class="st" style="height:${tot[i] / max * 90}px">${series.map(s => s.vals[i] > 0
-      ? `<i style="flex:${s.vals[i]};background:${s.color}"></i>` : '').join('')}</span>${monthName(m)}<br>${tot[i] ? (unit === 'lei' ? k(tot[i]) : num1(tot[i])) : ''}</div>`).join('')}</div>`;
+      ? `<i style="flex:${s.vals[i]};background:${s.color}"></i>` : '').join('')}</span>${monthName(m)}<br>${tot[i] ? (unit === 'lei' ? k(tot[i]) : num1(tot[i])) : '&nbsp;'}</div>`).join('')}</div>`;
 }
 const legend = hs => `<div class="chips small">${hs.map(p => `<span><i class="dot" style="background:${hobbyColor(p)}"></i>${esc(p.Emoji)} ${esc(p.Project)}</span>`).join('')}</div>`;
 const ago = iso => { if (!iso) return ''; const n = -days(iso); return n <= 0 ? 'today' : n === 1 ? 'yesterday' : n < 30 ? n + 'd ago' : n < 365 ? Math.round(n / 30) + ' mo ago' : Math.round(n / 365) + ' y ago'; };
@@ -1635,12 +1635,12 @@ function viewHobby(p) {
   if (has(p, 'tasks')) tiles.push([t.done + '/' + t.tasks.length, 'tasks done']);
   tiles.push([String(sum(pm, x => x.sessions)), 'sessions']);
   const cols = (vals, unit, color) => { const max = Math.max(1e-9, ...vals);
-    return `<div class="cols">${months.map((m, i) => `<div><b style="height:${vals[i] / max * 90}px;background:${color}"></b>${monthName(m)}<br>${vals[i] ? (unit === 'lei' ? k(vals[i]) : num1(vals[i])) : ''}</div>`).join('')}</div>`; };
+    return `<div class="cols">${months.map((m, i) => `<div><b style="height:${vals[i] / max * 90}px;background:${color}"></b>${monthName(m)}<br>${vals[i] ? (unit === 'lei' ? k(vals[i]) : num1(vals[i])) : '&nbsp;'}</div>`).join('')}</div>`; };
   const next = t.tasks.find(x => x.Status === 'doing') || t.tasks.find(x => x.Status !== 'done');
   // Journal: photos first (your progress at a glance), then every session.
   const log = t.log.slice().sort((a, b) => a.Date < b.Date ? 1 : a.Date > b.Date ? -1 : b._row - a._row);
-  const pics = log.filter(l => l.Thumb || l.Photo);
-  const logHtml = (pics.length ? `<div class="pics">${pics.map(l => `<button onclick="entryModal(${l._row})"><div class="ph" data-ph="${esc(l.Thumb || l.Photo)}"></div>
+  const pics = log.flatMap(l => picsOf(l).map(x => ({ l, x })));
+  const logHtml = (pics.length ? `<div class="pics">${pics.map(({ l, x }) => `<button onclick="entryModal(${l._row})"><div class="ph" data-ph="${esc(x.thumb)}"></div>
       <span>${fmt(l.Date).replace(/ \d{4}$/, '')}</span></button>`).join('')}</div>` : '') +
     log.map(l => { const bits = [+l.Hours ? num1(l.Hours) + ' h' : '', +l.Km ? Math.round(l.Km) + ' km' : '', +l.Count ? num1(l.Count) + ' ' + esc(p.CountName || '') : '', +l.Cost ? lei(l.Cost) : ''].filter(Boolean);
       return `<div class="row" onclick="entryModal(${l._row})"><span class="emo">${l.Photo ? '📷' : +l.Km ? '🛣️' : '⏱️'}</span>
@@ -1690,11 +1690,14 @@ function viewHobby(p) {
 }
 
 // ---------- log a session (only the fields this hobby uses) ----------
-let PENDING = null;   // the photo picked in the form, already shrunk on the phone
-// With `entry` (a ProjectLog row) the same form edits that session; its photo stays as it is.
+const MAX_PHOTOS = 5;
+// An entry's photos: Photo and Thumb hold Drive ids, comma-separated, in the same order.
+const picsOf = l => { const t = String(l.Thumb || '').split(','); return String(l.Photo || '').split(',').filter(Boolean).map((id, i) => ({ id, thumb: t[i] || id })); };
+let PENDING = [], DROP = [], EDITING = null;   // new photos picked in the form (already shrunk), and ids of the entry's photos to remove
+// With `entry` (a ProjectLog row) the same form edits that session, photos included.
 function logModal(row, entry) {
   const p = D.projects.find(x => x._row === row), l = entry ? D.projectlog.find(x => x._row === entry) : {};
-  PENDING = null;
+  PENDING = []; DROP = []; EDITING = l;
   const n = v => +v ? num1(v) : '';
   const f = (id, lab, v, extra) => `<div style="flex:1;min-width:0"><label>${lab}</label><input id="${id}" type="number" inputmode="decimal" value="${v}" ${extra || ''}></div>`;
   const nums = [has(p, 'time') || +l.Hours ? f('lh', 'Hours', n(l.Hours), 'step="0.25" placeholder="1.5"') : '', has(p, 'distance') || +l.Km ? f('lk', 'Kilometres', n(l.Km)) : '',
@@ -1704,9 +1707,23 @@ function logModal(row, entry) {
     ${nums.length ? `<div class="inline" style="flex-wrap:wrap">${nums.join('')}</div>` : ''}
     <label>${has(p, 'journal') ? 'What did you do? How did it go?' : 'Note'}</label>
     ${has(p, 'journal') ? `<textarea id="ln" rows="3">${esc(l.Note || '')}</textarea>` : `<input id="ln" value="${esc(l.Note || '')}">`}
-    ${has(p, 'journal') && !entry ? `<label>Photo (optional)</label><label class="photo-pick" for="lphoto"><span id="lprev">📷 Take or choose a photo</span></label>
-      <input id="lphoto" type="file" accept="image/*" style="display:none" onchange="pickPhoto(this)">` : ''}
+    ${has(p, 'journal') || l.Photo ? `<label>Photos (optional, up to ${MAX_PHOTOS})</label><div id="lprev"></div>
+      <input id="lphoto" type="file" accept="image/*" multiple style="display:none" onchange="pickPhoto(this)">` : ''}
     <div class="btns"><button class="btn" id="lsave" onclick="saveLog(${row}${entry ? ', ' + entry : ''})">Save</button></div>`);
+  showPicked();
+}
+// The form's photos: the entry's own (✕ marks one for removal) and the newly picked ones, then the add button while there is room.
+function showPicked() {
+  const el = $('#lprev');
+  if (!el) return;
+  const own = EDITING ? picsOf(EDITING).filter(x => !DROP.includes(x.id)) : [], n = own.length + PENDING.length;
+  const tile = (inner, undo) => `<div style="position:relative">${inner}<button class="chip" style="position:absolute;top:4px;right:4px;padding:2px 8px"
+    onclick="${undo}" aria-label="Remove photo">✕</button></div>`;
+  el.innerHTML = (n ? `<div class="pics">${own.map(x => tile(`<div class="ph" data-ph="${esc(x.thumb)}"></div>`, `DROP.push('${esc(x.id)}');showPicked()`)).join('')}
+      ${PENDING.map((x, i) => tile(`<div class="ph" style="background-image:url('${x.thumb}')"></div>`, `PENDING.splice(${i},1);showPicked()`)).join('')}</div>` : '') +
+    (n < MAX_PHOTOS ? `<label class="photo-pick" for="lphoto">📷 ${n ? 'Add another photo' : 'Take or choose photos'}</label>`
+      : `<p class="muted small">That's ${MAX_PHOTOS} photos, the most one entry can hold.</p>`);
+  loadPhotos();
 }
 // Shrink on the phone before sending: a large copy (1600 px) to keep, and a small one (400 px) for the timeline.
 function shrink(img, max, q) {
@@ -1716,41 +1733,49 @@ function shrink(img, max, q) {
   return c.toDataURL('image/jpeg', q);
 }
 function pickPhoto(input) {
-  const file = input.files && input.files[0];
-  if (!file) return;
-  const url = URL.createObjectURL(file), img = new Image();
-  img.onload = () => {
-    PENDING = { photo: shrink(img, 1600, 0.82), thumb: shrink(img, 400, 0.72) };
-    URL.revokeObjectURL(url);
-    $('#lprev').innerHTML = `<img src="${PENDING.thumb}" alt="" style="max-height:160px;border-radius:12px;display:block;margin:0 auto">`;
-  };
-  img.onerror = () => toast('⚠️ This photo type cannot be read. Try a JPG or PNG.');
-  img.src = url;
+  const own = EDITING ? picsOf(EDITING).filter(x => !DROP.includes(x.id)).length : 0, room = MAX_PHOTOS - own - PENDING.length;
+  const files = [...(input.files || [])];
+  input.value = '';   // so the same photo can be picked again after removing it
+  if (files.length > room) toast(`Only ${room} more photo${room === 1 ? '' : 's'} fit, the first ${room} were added`);
+  files.slice(0, Math.max(0, room)).forEach(file => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      if (PENDING.length + own < MAX_PHOTOS) PENDING.push({ photo: shrink(img, 1600, 0.82), thumb: shrink(img, 400, 0.72) });
+      URL.revokeObjectURL(url);
+      showPicked();
+    };
+    img.onerror = () => toast('⚠️ This photo type cannot be read. Try a JPG or PNG.');
+    img.src = url;
+  });
 }
 function saveLog(row, entry) {
   const p = D.projects.find(x => x._row === row);
   const v = { Date: val('ld') || todayISO(), Project: p.Project, Type: 'Session', Hours: +val('lh') || '', Km: +val('lk') || '',
               Count: +val('lq') || '', Cost: +val('lc') || '', Note: val('ln') };
-  const l = entry && D.projectlog.find(x => x._row === entry);
-  if (!v.Hours && !v.Km && !v.Count && !v.Cost && !v.Note && !PENDING && !(l && l.Photo)) return toast('Write something first');
-  if (entry) { delete v.Type; return upd('ProjectLog', entry, v, 'Saved ✓'); }
-  if (PENDING) { v._photo = PENDING.photo; v._thumb = PENDING.thumb; }
+  const left = (entry ? picsOf(EDITING).filter(x => !DROP.includes(x.id)).length : 0) + PENDING.length;
+  if (!v.Hours && !v.Km && !v.Count && !v.Cost && !v.Note && !left) return toast('Write something first');
+  if (entry) delete v.Type;
+  if (entry && !PENDING.length && !DROP.length) return upd('ProjectLog', entry, v, 'Saved ✓');
+  if (PENDING.length) v._photos = PENDING.map(x => ({ photo: x.photo, thumb: x.thumb }));
+  if (DROP.length) v._remove = DROP.slice();
   // keep the form open until Google has saved it, so you can see it working (and try again if it fails)
-  const btn = $('#lsave'); btn.disabled = true; btn.textContent = PENDING ? 'Saving the photo… (a few seconds)' : 'Saving…';
-  call('addRow', { tab: 'ProjectLog', values: v }).then(async () => {
-    PENDING = null; closeModal(); toast('Logged ✓'); await load();
+  const btn = $('#lsave'); btn.disabled = true;
+  btn.textContent = PENDING.length ? `Saving ${PENDING.length === 1 ? 'the photo' : PENDING.length + ' photos'}… (a few seconds)` : 'Saving…';
+  call(entry ? 'updateRow' : 'addRow', entry ? { tab: 'ProjectLog', row: entry, values: v } : { tab: 'ProjectLog', values: v }).then(async () => {
+    PENDING = []; DROP = []; closeModal(); toast(entry ? 'Saved ✓' : 'Logged ✓'); await load();
   }, () => { btn.disabled = false; btn.textContent = 'Try again'; });
 }
 function entryModal(row) {
   const l = D.projectlog.find(x => x._row === row), p = D.projects.find(x => x.Project === l.Project && ownerOf(x) === ownerOf(l)) || {};
   const bits = [+l.Hours ? num1(l.Hours) + ' hours' : '', +l.Km ? Math.round(l.Km) + ' km' : '', +l.Count ? num1(l.Count) + ' ' + esc(p.CountName || '') : '', +l.Cost ? lei(l.Cost) : ''].filter(Boolean);
+  const pics = picsOf(l), them = pics.length > 1 ? 'photos' : 'photo';
   openModal(`<h3>${esc(p.Emoji || '')} ${fmt(l.Date)}</h3>
-    ${l.Photo ? `<img class="full" data-phf="${esc(l.Photo)}" alt="Photo from ${fmt(l.Date)}">` : ''}
+    ${pics.map((x, i) => `<img class="full" style="margin-bottom:8px" data-phf="${esc(x.id)}" alt="Photo ${i + 1} from ${fmt(l.Date)}">`).join('')}
     ${l.Note ? `<p style="white-space:pre-wrap">${esc(l.Note)}</p>` : ''}
     ${bits.length ? `<p class="muted">${bits.join(' · ')}</p>` : ''}
-    ${l._ro ? '' : `<div class="btns"><button class="btn ghost" onclick="if(confirm('Delete this entry${l.Photo ? ' and its photo' : ''}?'))act('deleteRow',{tab:'ProjectLog',row:${row}},'Deleted')">Delete</button>
+    ${l._ro ? '' : `<div class="btns"><button class="btn ghost" onclick="if(confirm('Delete this entry${pics.length ? ' and its ' + them : ''}?'))act('deleteRow',{tab:'ProjectLog',row:${row}},'Deleted')">Delete</button>
       ${p._row ? `<button class="btn" onclick="logModal(${p._row}, ${row})">Edit</button>` : ''}</div>
-      ${l.Photo ? '<p class="muted small">The photo moves to your Google Drive bin, where you can restore it for 30 days.</p>' : ''}`}`);
+      ${pics.length ? `<p class="muted small">Deleted or removed photos move to your Google Drive bin, where you can restore them for 30 days.</p>` : ''}`}`);
 }
 
 // ---------- photos: fetched from your Drive only when a screen shows them, kept while the app is open ----------
@@ -1825,7 +1850,7 @@ function viewSrl() {
       <div class="tile"><b>${lei(revenue * pct / 100)}</b><span>tax pot (${pct}%)</span></div>
       <div class="tile"><b>${lei(revenue - paid)}</b><span>unpaid</span></div></div>
     <h2>Revenue by quarter, ${year}</h2>
-    <div class="card"><div class="cols">${qs.map((v, i) => `<div><b style="height:${v / qmax * 90}px;background:var(--accent)"></b>Q${i + 1}<br>${v ? Math.round(v / 1000) + 'k' : ''}</div>`).join('')}</div></div>
+    <div class="card"><div class="cols">${qs.map((v, i) => `<div><b style="height:${v / qmax * 90}px;background:var(--accent)"></b>Q${i + 1}<br>${v ? Math.round(v / 1000) + 'k' : '&nbsp;'}</div>`).join('')}</div></div>
     ${srlHistory()}
     <h2>Deadlines</h2>
     ${open.map(dateRow).join('') || '<p class="muted">No open SRL deadlines.</p>'}
@@ -2349,17 +2374,24 @@ const MOCK = (() => {
   // preview photos: three simple drawings of a loaf getting better
   const loaf = (h, c) => 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#E9D3BD"/><ellipse cx="50" cy="${70 - h / 2}" rx="38" ry="${h}" fill="${c}"/><path d="M30 ${66 - h} q20 -8 40 0" stroke="#F3E3C8" stroke-width="3" fill="none"/></svg>`);
   const MOCK_PH = { m1: loaf(10, '#C79A62'), m2: loaf(17, '#B4783F'), m3: loaf(25, '#9A5B2A') };
+  let MOCK_N = 0;
   let unlocked = false;
   return { api(action, d) {
     if (action === 'pinStatus') return { role: 'owner', hasPin: true, valid: unlocked };
     if (action === 'login') { if (d.pin !== '1234') { toast('⚠️ Wrong PIN (preview PIN is 1234)'); throw new Error('wrong'); } unlocked = true; return 'preview'; }
     if (action === 'logout') { unlocked = false; return true; }
     if (action === 'getData') return Object.assign(JSON.parse(JSON.stringify(window.TEST_DB || db)), { sessionUntil: Date.now() + 864e5 });
+    // like savePhotos_ on the server: keep the entry's photos minus _remove, add _photos up to 5
+    const pics = (v, old) => { const keep = picsOf(old || {}).filter(x => !(v._remove || []).includes(x.id));
+      (v._photos || []).slice(0, Math.max(0, 5 - keep.length)).forEach(x => { const id = 'p' + (++MOCK_N); MOCK_PH[id] = x.photo; MOCK_PH[id + 't'] = x.thumb; keep.push({ id, thumb: id + 't' }); });
+      delete v._photos; delete v._remove; v.Photo = keep.map(x => x.id).join(','); v.Thumb = keep.map(x => x.thumb).join(','); };
     if (action === 'addRow') { const k = tabKey(d.tab), v = Object.assign({ _row: row++, Owner: 'owner' }, d.values);
-      if (v._photo) { v.Photo = 'p' + v._row; v.Thumb = 't' + v._row; MOCK_PH[v.Photo] = v._photo; MOCK_PH[v.Thumb] = v._thumb; delete v._photo; delete v._thumb; }
+      if (v._photos) pics(v);
       (db[k] = db[k] || []).push(v); return v._row; }
     if (action === 'photos') { const o = {}; d.ids.forEach(id => o[id] = MOCK_PH[id] || ''); return o; }
-    if (action === 'updateRow') Object.assign(db[tabKey(d.tab)].find(r => r._row === d.row), d.values);
+    if (action === 'updateRow') { const r = db[tabKey(d.tab)].find(x => x._row === d.row), v = Object.assign({}, d.values);
+      if (v._photos || v._remove) pics(v, r);
+      Object.assign(r, v); }
     if (action === 'markDone') { const r = db.dates.find(x => x._row === d.row); r.LastDone = t;
       if (+r.RepeatMonths) { const n = new Date(r.Due + 'T00:00:00'); n.setMonth(n.getMonth() + +r.RepeatMonths); r.Due = n.toISOString().slice(0, 10); } }
     if (action === 'answer') db.transactions.forEach(x => { if (x._row === d.row) x.Category = d.category; });

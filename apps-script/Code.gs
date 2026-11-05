@@ -583,7 +583,8 @@ function api(key, action, data) {
       case 'addRow':
         checkTab_(data.tab, who, data.values);
         if (PERSONAL_TABS.includes(data.tab)) checkHobby_(data.tab, who, data.values, 0);
-        if (data.tab === 'ProjectLog' && data.values._photo) Object.assign(data.values, savePhoto_(data.values));
+        if (data.tab === 'ProjectLog') { delete data.values.Photo; delete data.values.Thumb; }   // only uploads below may set them
+        if (data.tab === 'ProjectLog' && data.values._photos) Object.assign(data.values, savePhotos_(data.values, null));
         const row = append_(data.tab, data.values);
         if (data.tab === 'Dates') queueSync_(row);
         return row;
@@ -594,9 +595,12 @@ function api(key, action, data) {
           if (old) checkTab_(data.tab, who, old);
         }
         if (PERSONAL_TABS.includes(data.tab)) checkHobby_(data.tab, who, data.values, data.row);
+        if (data.tab === 'ProjectLog') { delete data.values.Photo; delete data.values.Thumb; }   // only uploads below may set them
+        if (data.tab === 'ProjectLog' && (data.values._photos || data.values._remove))
+          Object.assign(data.values, savePhotos_(data.values, read_('ProjectLog').find(r => r._row === data.row)));
         update_(data.tab, data.row, data.values);
         if (data.tab === 'Dates') queueSync_(data.row);
-        return true;
+        return data.tab === 'ProjectLog' && 'Photo' in data.values ? { Photo: data.values.Photo, Thumb: data.values.Thumb } : true;
       case 'markDone': return markDone_(data.row, who);
       case 'tagTrip': return tagTrip_(who, data.trip, data.add || [], data.remove || []);
       case 'import': return import_(data.text, data.account, data.person);
@@ -621,7 +625,7 @@ function api(key, action, data) {
         if (data.tab === 'TripItems') checkTab_(data.tab, who, read_('TripItems').find(r => r._row === data.row));
         if (data.tab === 'ProjectLog') {
           const l = read_('ProjectLog').find(r => r._row === data.row);
-          [l.Photo, l.Thumb].filter(Boolean).forEach(trashFile_);   // photos go to the Drive bin (restorable for 30 days)
+          ids_(l.Photo).concat(ids_(l.Thumb)).forEach(trashFile_);   // photos go to the Drive bin (restorable for 30 days)
         }
         sheet_(data.tab).deleteRow(data.row);
         return true;
@@ -786,14 +790,31 @@ function uploadJpeg_(name, base64, folder) {
   return JSON.parse(drive_('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
     { method: 'post', contentType: 'multipart/related; boundary=' + b, payload: bytes }).getContentText()).id;
 }
-// The phone sends the picture already shrunk: a large one (about 1600 px) and a small one for the timeline.
-function savePhoto_(v) {
+// A journal entry holds up to MAX_PHOTOS pictures: Photo and Thumb list their Drive ids, comma-separated, in the same order.
+const MAX_PHOTOS = 5;
+function ids_(s) { return String(s || '').split(',').map(x => x.trim()).filter(Boolean); }
+// The phone sends each picture already shrunk: a large one (about 1600 px) and a small one for the timeline.
+// v._photos = new pictures [{photo, thumb}], v._remove = ids of this entry's pictures to drop (they go to the Drive bin).
+function savePhotos_(v, old) {
   const clean = s => String(s || '').replace(/^data:image\/\w+;base64,/, '');
-  const folder = photoFolder_(), name = String(v.Date || iso_(new Date())) + ' ' + String(v.Project || 'hobby').replace(/[\\/:*?"<>|]/g, '');
-  const out = { Photo: uploadJpeg_(name + '.jpg', clean(v._photo), folder),
-                Thumb: v._thumb ? uploadJpeg_(name + ' (small).jpg', clean(v._thumb), folder) : '' };
-  delete v._photo; delete v._thumb;
-  return out;
+  const thumbs = ids_(old && old.Thumb), drop = new Set((v._remove || []).map(String));
+  const keep = ids_(old && old.Photo).map((id, i) => [id, thumbs[i] || id]).filter(x => {
+    if (!drop.has(x[0])) return true;
+    new Set(x).forEach(trashFile_);
+    return false;
+  });
+  const add = (v._photos || []).slice(0, Math.max(0, MAX_PHOTOS - keep.length));
+  if (add.length) {
+    const folder = photoFolder_(), name = String(v.Date || (old && old.Date) || iso_(new Date())) + ' ' +
+      String(v.Project || (old && old.Project) || 'hobby').replace(/[\\/:*?"<>|]/g, '');
+    const had = keep.length;
+    add.forEach((p, i) => {
+      const n = name + (had + i ? ' ' + (had + i + 1) : ''), id = uploadJpeg_(n + '.jpg', clean(p.photo), folder);
+      keep.push([id, p.thumb ? uploadJpeg_(n + ' (small).jpg', clean(p.thumb), folder) : id]);
+    });
+  }
+  delete v._photos; delete v._remove;
+  return { Photo: keep.map(x => x[0]).join(','), Thumb: keep.map(x => x[1]).join(',') };
 }
 function trashFile_(id) {
   try { drive_(DRIVE_API + '/' + id, { method: 'patch', contentType: 'application/json', payload: JSON.stringify({ trashed: true }) }); } catch (e) { /* already gone */ }
@@ -801,7 +822,7 @@ function trashFile_(id) {
 // Send photos to the phone, but only ones from hobbies this link may see.
 function photos_(who, ids) {
   const allowed = new Set();
-  visibleHobbyRows_(who, 'ProjectLog').forEach(l => { if (l.Photo) allowed.add(String(l.Photo)); if (l.Thumb) allowed.add(String(l.Thumb)); });
+  visibleHobbyRows_(who, 'ProjectLog').forEach(l => ids_(l.Photo).concat(ids_(l.Thumb)).forEach(id => allowed.add(id)));
   const out = {};
   ids.slice(0, 24).filter(id => allowed.has(String(id))).forEach(id => {
     try { out[id] = 'data:image/jpeg;base64,' + Utilities.base64Encode(drive_(DRIVE_API + '/' + id + '?alt=media').getContent()); } catch (e) { out[id] = ''; }
