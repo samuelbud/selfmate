@@ -8,6 +8,7 @@
 !.githooks/pre-commit
 !tools/
 !tools/privacy-check.js
+!tools/check-live.js
 !apps-script/
 !apps-script/Code.gs
 !apps-script/Push.gs

@@ -218,6 +218,7 @@ function doGet(e) {
   const p = (e && e.parameter) || {};
   const props = PropertiesService.getScriptProperties();
   if (!props.getProperty('OWNER_KEY')) return firstRun_();
+  if (p.check === 'page') return builtPage_();   // after publishing: tools/check-live.js tests that this page's code still runs
   if (p.push) return pushApi_(p);   // the home-screen app's notification requests (Push.gs)
   // The owner opening the plain link (no key) gets their links shown again.
   if (!p.k && isOwnerVisiting_()) return linksPage_('🔑 Your SelfMate links');
@@ -235,6 +236,15 @@ function doGet(e) {
     .setFaviconUrl(ICON_URL)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1');
+}
+
+// Google rewrites the page when it builds it (it strips comments, and can cut a line at a "//" inside a text, which stops
+// the whole app from starting). This returns the page as built, with a fake key and no data: the code is public anyway.
+function builtPage_() {
+  const t = HtmlService.createTemplateFromFile('Index');
+  t.key = '0123456789abcdef';
+  t.start = Utilities.base64Encode('{}', Utilities.Charset.UTF_8);
+  return ContentService.createTextOutput(t.evaluate().getContent()).setMimeType(ContentService.MimeType.TEXT);
 }
 
 // The very first time the owner opens the app, set everything up and show the links once.

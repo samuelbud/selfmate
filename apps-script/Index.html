@@ -394,6 +394,7 @@ async function load() {
   }
   if (!D && SESSION && (D = savedCopy())) { prepare(D); STALE = true; render(); }
   const seq = SEQ, d = await call('getData').catch(e => { loadFailed(e); return null; });
+  if (d === null && !D) loadFailed(new Error('Google answered with nothing.'));   // a reply it cannot send arrives as null, with no error
   if (!d || seq !== SEQ) return;   // locked, or a newer change happened meanwhile: its own reload will show it
   saveCopy(d);
   D = prepare(d); STALE = false;
@@ -2892,7 +2893,7 @@ const MOCK = (() => {
       { _row: 7, Date: off(-20), Project: 'Biking', Type: 'Session', Hours: 2, Km: 42, Note: 'Făget loop' },
       { _row: 8, Date: off(-3), Project: 'Biking', Type: 'Session', Hours: 1.5, Km: 30, Cost: 120, Note: 'New tyres' }],
     wishlist: [
-      { _row: 2, Item: 'Rain jacket', Price: 349, Shop: 'Decathlon', Added: off(-3), WaitUntil: off(-1), Status: 'waiting', Link: 'https://example.com/jacket' },
+      { _row: 2, Item: 'Rain jacket', Price: 349, Shop: 'Decathlon', Added: off(-3), WaitUntil: off(-1), Status: 'waiting', Link: '#' },
       { _row: 3, Item: 'Espresso machine', Price: 1299, Shop: 'eMAG', Added: off(-4), WaitUntil: off(10), Status: 'waiting' },
       { _row: 4, Item: 'Wireless earbuds', Price: 420, Shop: 'Altex', Added: off(-30), WaitUntil: off(-28), Status: 'dropped', Decided: off(-27) },
       { _row: 5, Item: 'Hiking boots', Price: 610, Shop: 'Decathlon', Added: off(-50), WaitUntil: off(-36), Status: 'bought', Decided: off(-35) }],
