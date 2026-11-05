@@ -28,6 +28,11 @@
   .err { color: #B8436B; font-size: 14px; min-height: 1.5em; }
   .loading { position: fixed; inset: 0; display: grid; place-items: center; font-family: "Young Serif", serif; color: var(--muted); }
   :focus-visible { outline: 3px solid #F2C14E; outline-offset: 2px; }
+  .ask { position: fixed; inset: 0; z-index: 9; display: flex; align-items: flex-end; background: rgba(20,33,26,.45); }
+  .ask > div { width: 100%; max-width: 520px; margin: 0 auto; padding: 22px 20px 28px; border-radius: 26px 26px 0 0; color: #F3EEDC;
+    background: linear-gradient(165deg, #1B2742 0%, #36406E 65%, #B8736C 140%); }
+  .ask b { font-family: "Young Serif", Georgia, serif; font-weight: 400; font-size: 22px; } .ask p { color: #E4DDC8; }
+  .ask button.no { background: transparent; color: #F3EEDC; margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -40,12 +45,30 @@ const valid = u => /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec\?k=[
 const root = document.getElementById('root');
 let saved = null;
 try { saved = localStorage.getItem(KEY); } catch (e) { /* storage blocked: ask every time */ }
-if (location.hash === '#forget') { try { localStorage.removeItem(KEY); } catch (e) {} saved = null; history.replaceState(null, '', location.pathname); }
+if (location.hash === '#forget') {
+  try { localStorage.removeItem(KEY); } catch (e) {}
+  if (window.caches) caches.delete('selfmate-link').catch(() => {});
+  saved = null; history.replaceState(null, '', location.pathname);
+}
+// Shared from another app (Share → SelfMate): the page opens with ?title=…&text=…&url=…  The notification opens #mood.
+const qs = new URLSearchParams(location.search);
+let shared = ['title', 'text', 'url'].map(k => qs.get(k) || '').filter(Boolean)
+  .filter((v, i, a) => !a.some((x, j) => j !== i && x.includes(v) && (x !== v || j < i))).join(' ').trim();   // apps often repeat the name or link
+let openMood = location.hash === '#mood';
+if (shared || openMood) history.replaceState(null, '', location.pathname);
+let current = '';
 
 function openApp(link) {
+  current = link;
+  // the notification helper (sw.js) uses the link to ask your SelfMate for tonight's line; it stays on this phone
+  if (window.caches) caches.open('selfmate-link').then(c => c.put('link', new Response(link))).catch(() => {});
+  let src = link + '&home=1';
+  if (shared) src += '&wish=' + encodeURIComponent(shared.slice(0, 1500));
+  if (openMood) src += '&open=mood';
+  shared = ''; openMood = false;
   root.innerHTML = '<div class="loading">Watering the garden…</div>';
   const f = document.createElement('iframe');
-  f.src = link; f.title = 'SelfMate'; f.allow = 'clipboard-write';
+  f.src = src; f.title = 'SelfMate'; f.allow = 'clipboard-write';
   f.onload = () => { const l = document.querySelector('.loading'); if (l) l.remove(); };
   root.appendChild(f);
 }
@@ -69,6 +92,61 @@ function setup() {
 }
 saved && valid(saved) ? openApp(saved) : setup();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+// ---------- notifications: SelfMate (inside the frame) asks, this page does it ----------
+const reopenForMood = () => { if (current) { openMood = true; openApp(current); } };
+window.addEventListener('hashchange', () => { if (location.hash === '#mood') { history.replaceState(null, '', location.pathname); reopenForMood(); } });
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.selfmate === 'open-mood') reopenForMood(); });
+const ask = (link, what, extra) => fetch(link + '&push=' + what + (extra || '')).then(r => r.json());
+const b64 = s => { const t = atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)); return Uint8Array.from(t, c => c.charCodeAt(0)); };
+async function subscription() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
+  const reg = await navigator.serviceWorker.ready;
+  return reg.pushManager.getSubscription();
+}
+// Our own question first (a tap here also lets the phone show its permission prompt), then the phone's.
+function permission() {
+  if (Notification.permission !== 'default') return Promise.resolve(Notification.permission);
+  return new Promise(res => {
+    const box = document.createElement('div'); box.className = 'ask';
+    box.innerHTML = '<div><b>🌙 An evening reminder?</b><p>Once a day, at the time you chose, with a short thought for the evening. Nothing else.</p>' +
+      '<button id="yes">Allow notifications</button><button class="no" id="no">Not now</button></div>';
+    document.body.appendChild(box);
+    box.querySelector('#yes').onclick = async () => { box.remove(); res(await Notification.requestPermission()); };
+    box.querySelector('#no').onclick = () => { box.remove(); res('default'); };
+  });
+}
+async function pushOn(link) {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !window.Notification) throw new Error('This browser cannot show notifications. Use Chrome.');
+  const perm = await permission();
+  if (perm === 'denied') throw new Error('Notifications are blocked. Allow them in the phone settings (Apps → SelfMate → Notifications), then try again.');
+  if (perm !== 'granted') throw new Error('Notifications were not allowed.');
+  const { key, error } = await ask(link, 'key');
+  if (error) throw new Error(error);
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  const same = sub && sub.options && sub.options.applicationServerKey && btoa(String.fromCharCode(...new Uint8Array(sub.options.applicationServerKey))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') === key;
+  if (sub && !same) { await sub.unsubscribe(); sub = null; }
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(key) });
+  const r = await ask(link, 'sub', '&sub=' + encodeURIComponent(JSON.stringify({ endpoint: sub.endpoint })));
+  if (r.error) throw new Error(r.error);
+}
+async function pushOff(link) {
+  const sub = await subscription();
+  if (!sub) return;
+  await ask(link, 'unsub', '&sub=' + encodeURIComponent(JSON.stringify({ endpoint: sub.endpoint }))).catch(() => null);
+  await sub.unsubscribe();
+}
+const isOn = async () => !!(window.Notification && Notification.permission === 'granted' && await subscription().catch(() => null));
+window.addEventListener('message', async e => {
+  if (!/^https:\/\/[\w-]+\.googleusercontent\.com$/.test(e.origin) || !e.data || !current) return;   // only your SelfMate, inside this page
+  const reply = m => e.source && e.source.postMessage(Object.assign({ selfmate: 'push-status' }, m), e.origin);
+  try {
+    if (e.data.selfmate === 'hello') reply({ subscribed: await isOn() });
+    if (e.data.selfmate === 'push-on') { await pushOn(current); reply({ subscribed: true, changed: true }); }
+    if (e.data.selfmate === 'push-off') { await pushOff(current); reply({ subscribed: false, changed: true }); }
+  } catch (err) { reply({ subscribed: await isOn(), error: err.message || String(err) }); }
+});
 </script>
 </body>
 </html>

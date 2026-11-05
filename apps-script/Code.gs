@@ -46,17 +46,31 @@ const TABS = {
   Countries:    ['Country', 'Owner', 'Years', 'Notes'],
   // Kind: cash | savings | investment. Amounts you update by hand (cash at home, EUR, savings accounts...)
   Balances:     ['Name', 'Emoji', 'Amount', 'Currency', 'Kind', 'Updated'],
+  // Things you want to buy: each waits until WaitUntil before you decide. Status: waiting | bought | dropped. Personal.
+  Wishlist:     ['Item', 'Price', 'Link', 'Shop', 'Image', 'Added', 'WaitUntil', 'Status', 'Decided', 'Notes', 'Owner'],
+  // One evening rating per person per day. Mood and Energy 1–5, Sleep 0–10 (last night), Tags comma separated. Personal.
+  Mood:         ['Date', 'Mood', 'Energy', 'Sleep', 'Tags', 'Note', 'Owner'],
+  // Health (personal, never shared). PerDay = pills a day, Stock = pills left on StockDate. Active: empty = yes, "no" = stopped.
+  Medicines:    ['Name', 'Dose', 'When', 'PerDay', 'Stock', 'StockDate', 'Active', 'Notes', 'Owner'],
+  // One measurement: Kind (Weight, Blood pressure…), Value (+ Value2 for a second number, e.g. the lower blood pressure), Unit.
+  Measures:     ['Date', 'Kind', 'Value', 'Value2', 'Unit', 'Note', 'Owner'],
+  // Visits, results, vaccines, symptoms. Type: visit | result | vaccine | symptom
+  HealthLog:    ['Date', 'Type', 'Title', 'Doctor', 'Notes', 'Owner'],
+  // Lines for the evening notification (one a day, in turn). Shared by both of you.
+  Lines:        ['Line'],
 };
 // Home-screen / browser icon (Microsoft Fluent 3D emoji "Seedling", free to use under the MIT licence)
 const ICON_URL = 'https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Seedling/3D/seedling_3d.png';
 const PRIVATE_TABS =['Invoices', 'SrlMonths', 'SrlCosts'];
 const HOBBY_TABS = ['Projects', 'Tasks', 'Items', 'ProjectLog'];   // personal: each row belongs to one person
-const PERSONAL_TABS = HOBBY_TABS.concat(['Countries']);   // rows with an Owner: each link sees and changes only its own
-const EDITABLE_TABS = ['Dates', 'Transactions', 'Goals', 'Categories', 'Rules', 'Trips', 'TripItems', 'Balances'].concat(PRIVATE_TABS, PERSONAL_TABS);
-const DELETABLE_TABS = ['Goals', 'Balances', 'ProjectLog', 'Countries', 'TripItems'];   // rows you can remove from the app (everything else: delete in the Sheet)
+const PERSONAL_TABS = HOBBY_TABS.concat(['Countries', 'Wishlist', 'Mood', 'Medicines', 'Measures', 'HealthLog']);
+const OWN_ONLY_TABS = ['Wishlist', 'Mood', 'Medicines', 'Measures', 'HealthLog'];   // never shown to the other person, not even while sharing   // rows with an Owner: each link sees and changes only its own
+const EDITABLE_TABS = ['Dates', 'Transactions', 'Goals', 'Categories', 'Rules', 'Trips', 'TripItems', 'Balances', 'Lines'].concat(PRIVATE_TABS, PERSONAL_TABS);
+const DELETABLE_TABS = ['Goals', 'Balances', 'ProjectLog', 'Countries', 'TripItems', 'Lines'].concat(OWN_ONLY_TABS);   // rows you can remove from the app (everything else: delete in the Sheet)
 const BIG_PROJECT_TOOLS = 'time,money,journal,distance,tasks,parts';
-const DATE_COLS = ['Due', 'LastDone', 'Date', 'Started', 'PaidOn', 'Start', 'End', 'Updated'];
-const PARTNER_SETTINGS = [];
+const DATE_COLS = ['Due', 'LastDone', 'Date', 'Started', 'PaidOn', 'Start', 'End', 'Updated', 'Added', 'WaitUntil', 'Decided', 'StockDate'];
+// The partner may change only their own evening-reminder settings.
+const PARTNER_SETTINGS = ['PartnerMoodTime', 'PartnerMoodPush', 'PartnerMoodTags'];
 // What identifies a row, per tab. Rows are addressed by their Sheet row number, which shifts when a row above is
 // deleted; before changing a row the server checks these columns still match what the phone saw (see rowFor_).
 const ROW_KEYS = {
@@ -64,6 +78,8 @@ const ROW_KEYS = {
   Rules: ['Match'], Trips: ['Trip'], TripItems: ['Trip', 'Type', 'Title'], Balances: ['Name'], Invoices: ['Number'],
   SrlMonths: ['Month'], SrlCosts: ['Date', 'Amount', 'Item'], Projects: ['Project', 'Owner'], Tasks: ['Project', 'Task'],
   Items: ['Project', 'Item'], ProjectLog: ['Date', 'Project', 'Type', 'Note'], Countries: ['Country', 'Owner'],
+  Wishlist: ['Item', 'Added'], Mood: ['Date', 'Owner'], Medicines: ['Name', 'Owner'], Measures: ['Date', 'Kind', 'Value'],
+  HealthLog: ['Date', 'Title'], Lines: ['Line'],
 };
 
 // ---------- Starter data (edit freely in the Sheet afterwards) ----------
@@ -194,6 +210,7 @@ const SEED = {
     ['Cash in EUR', '💶', 0, 'EUR', 'cash', ''],
     ['Savings account', '🏦', 0, 'RON', 'savings', ''],
   ],
+  Lines: () => SEED_LINES.map(l => [l]),
 };
 
 // ---------- Web app entry ----------
@@ -201,6 +218,7 @@ function doGet(e) {
   const p = (e && e.parameter) || {};
   const props = PropertiesService.getScriptProperties();
   if (!props.getProperty('OWNER_KEY')) return firstRun_();
+  if (p.push) return pushApi_(p);   // the home-screen app's notification requests (Push.gs)
   // The owner opening the plain link (no key) gets their links shown again.
   if (!p.k && isOwnerVisiting_()) return linksPage_('🔑 Your SelfMate links');
   if (!auth_(p.k)) {
@@ -210,6 +228,8 @@ function doGet(e) {
   }
   const t = HtmlService.createTemplateFromFile('Index');
   t.key = p.k;
+  // home = opened inside the home-screen app (notifications possible); wish = text shared from another app; open = a panel to show
+  t.start = Utilities.base64Encode(JSON.stringify({ home: p.home === '1', wish: String(p.wish || '').slice(0, 2000), open: String(p.open || '').slice(0, 20) }), Utilities.Charset.UTF_8);
   return t.evaluate()
     .setTitle('SelfMate')
     .setFaviconUrl(ICON_URL)
@@ -287,7 +307,7 @@ function imports_() {
 }
 
 function upgrade_() {
-  if (prop_('SCHEMA') === '8' && imports_().every(h => prop_('IMPORTED_' + h.id))) return;
+  if (prop_('SCHEMA') === '9' && imports_().every(h => prop_('IMPORTED_' + h.id))) return;
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -322,6 +342,10 @@ function upgrade_() {
       const TAG = { 'Travel': 'travel', 'Coffee': 'treat', 'Eating out': 'treat', 'Subscriptions': 'subscription' };
       read_('Categories').filter(c => !c.Tag && TAG[c.Category]).forEach(c => update_('Categories', c._row, { Tag: TAG[c.Category] }));
       setProp_('SCHEMA', '8');
+    }
+    if (prop_('SCHEMA') < '9') {          // v3.0: wishlist, mood & energy, health, evening lines
+      ensureTabs_(ss_());
+      setProp_('SCHEMA', '9');
     }
     imports_().filter(h => !prop_('IMPORTED_' + h.id)).forEach(h => {
       appendRows_('Transactions', h.transactions);
@@ -574,6 +598,8 @@ function api(key, action, data) {
   // sessionUntil: the phone keeps its saved copy of the data only while this PIN session lasts.
   if (action === 'getData') return Object.assign(getData_(who), { sessionUntil: Number(prop_('S_' + data._s).split('|')[1]) });
   if (action === 'photos') return photos_(who, data.ids || []);   // read-only: no lock needed
+  if (action === 'peek') return peek_(data.url);                    // reads a shop page, changes nothing
+  if (action === 'pushTest') return { sent: pushTo_(who.role), devices: subsOf_(who.role).length };
 
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -619,6 +645,7 @@ function api(key, action, data) {
         PropertiesService.getScriptProperties().setProperty('PRIVATE_UNTIL', '0');
         return true;
       case 'checkin': return checkin_(who, data.plan);
+      case 'rate': return rate_(who, data.values || {});
       case 'deleteRow':
         if (!DELETABLE_TABS.includes(data.tab)) throw new Error('Delete these in the Sheet');
         if (PERSONAL_TABS.includes(data.tab)) checkHobby_(data.tab, who, {}, data.row);
@@ -939,6 +966,9 @@ function getData_(who) {
   out.countries = read_('Countries').filter(c => (c.Owner || 'owner') === who.role);
   if (who.canPrivate) PRIVATE_TABS.forEach(t => out[t.toLowerCase()] = read_(t));
   HOBBY_TABS.forEach(t => out[t.toLowerCase()] = visibleHobbyRows_(who, t));
+  OWN_ONLY_TABS.forEach(t => out[t.toLowerCase()] = read_(t).filter(r => (r.Owner || 'owner') === who.role));
+  out.lines = read_('Lines');
+  out.push = Object.assign({ devices: subsOf_(who.role).length }, moodPrefs_(who.role, s));
   return out;
 }
 
@@ -972,6 +1002,55 @@ function markDone_(row, who) {
   update_('Dates', row, values);
   queueSync_(row);
   return values;
+}
+
+// One evening rating per person per day: a second rating of the same day replaces the first.
+function rate_(who, v) {
+  const day = String(v.Date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day > iso_(new Date())) throw new Error('Pick a day up to today');
+  const n15 = x => { const k = Math.round(Number(x)); if (!(k >= 1 && k <= 5)) throw new Error('Choose your mood and energy'); return k; };
+  const sleep = v.Sleep === '' || v.Sleep == null ? '' : Math.max(0, Math.min(10, Math.round(Number(v.Sleep)) || 0));
+  const row = { Date: day, Mood: n15(v.Mood), Energy: n15(v.Energy), Sleep: sleep, Tags: String(v.Tags || '').slice(0, 300),
+                Note: String(v.Note || '').slice(0, 1000), Owner: who.role };
+  const old = read_('Mood').find(m => m.Date === day && (m.Owner || 'owner') === who.role);
+  if (old) { update_('Mood', old._row, row); return old._row; }
+  return append_('Mood', row);
+}
+
+// Read a shop's product page for the wishlist: name, price, picture, shop. Works with any shop that publishes the usual
+// tags (Open Graph, schema.org). Nothing is stored here; the phone fills in the form and you can change everything.
+function peek_(url) {
+  url = String(url || '').trim();
+  if (!/^https?:\/\/[^\s/]+\.[^\s]+$/i.test(url)) throw new Error('That does not look like a web link');
+  let r;
+  try {
+    r = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true,
+      headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Mobile Safari/537.36',
+                 'Accept-Language': 'ro-RO,ro;q=0.9,en;q=0.8' } });
+  } catch (e) { return { url: url }; }
+  return Object.assign({ url: url }, readProductPage_(r.getResponseCode() < 400 ? r.getContentText().slice(0, 800000) : '', url));
+}
+function readProductPage_(html, url) {
+  const dec = s => String(s || '').replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&#(\d+);/g, (m, n) => String.fromCharCode(+n)).replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+  const meta = name => {
+    const a = html.match(new RegExp('<meta[^>]+(?:property|name|itemprop)=["\']' + name + '["\'][^>]*content=["\']([^"\']*)', 'i')) ||
+              html.match(new RegExp('<meta[^>]+content=["\']([^"\']*)["\'][^>]*(?:property|name|itemprop)=["\']' + name + '["\']', 'i'));
+    return a ? dec(a[1]) : '';
+  };
+  const find = re => { const m = html.match(re); return m ? dec(m[1]) : ''; };
+  const host = url.replace(/^https?:\/\/(www\.)?/i, '').split(/[/?#]/)[0];
+  const shop = meta('og:site_name') || host;
+  const word = host.split('.')[0].toLowerCase();
+  // drop a trailing " - eMAG.ro" / " | IKEA" from the title when it is just the shop's name
+  const title = (meta('og:title') || meta('twitter:title') || find(/<title[^>]*>([^<]*)/i))
+    .replace(/\s+[-|–]\s+[^-|–]{2,40}$/, m => (m.toLowerCase().includes(word) || m.toLowerCase().includes(shop.toLowerCase()) ? '' : m)).slice(0, 160);
+  const price = meta('product:price:amount') || meta('og:price:amount') || meta('price') ||
+    find(/"(?:price|lowPrice)"\s*:\s*"?(\d[\d.,]*)/i) || find(/itemprop=["']price["'][^>]*content=["']([\d.,]+)/i);
+  const currency = (meta('product:price:currency') || meta('og:price:currency') || meta('priceCurrency') || find(/"priceCurrency"\s*:\s*"([A-Za-z]{3})"/)).toUpperCase();
+  const image = meta('og:image') || meta('twitter:image');
+  return { title: title, price: price ? num_(price) : '', currency: currency === 'LEI' ? 'RON' : currency,
+           image: /^https:\/\//.test(image) ? image.slice(0, 500) : '', shop: shop.slice(0, 60) };
 }
 
 // ---------- Bank statement import (BT, Revolut, most CSVs) ----------

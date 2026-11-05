@@ -10,6 +10,7 @@
 !tools/privacy-check.js
 !apps-script/
 !apps-script/Code.gs
+!apps-script/Push.gs
 !apps-script/Index.html
 !apps-script/appsscript.json
 !apps-script/Config.example.txt
@@ -19,3 +20,9 @@
 !docs/sw.js
 !docs/icon-192.png
 !docs/icon-512.png
+!docs/badge-96.png
+!docs/sky-1.png
+!docs/sky-2.png
+!docs/sky-3.png
+!docs/sky-4.png
+!docs/sky-5.png

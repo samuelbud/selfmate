@@ -186,7 +186,7 @@
   nav#tabs { position: fixed; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; gap: 2px;
     background: var(--ink); padding: 5px; border-radius: 28px; box-shadow: 0 8px 24px rgba(29,53,39,.25); z-index: 6; width: min(calc(100% - 16px), 470px); }
   nav#tabs button { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; color: var(--bg); padding: 6px 2px 5px; border-radius: 22px;
-    font-size: 10.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    font-size: min(10.5px, 2.85vw); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   nav#tabs button .i { font-size: 18px; line-height: 1.15; }
   nav#tabs button.on { background: var(--sprout); color: #1D3527; }
   .modal { position: fixed; inset: 0; background: rgba(20,33,26,.45); display: flex; align-items: flex-end; z-index: 10; }
@@ -222,6 +222,36 @@
   img.full { display: block; width: 100%; min-height: 120px; border-radius: 16px; background: var(--line); }
   label.tool { display: flex; gap: 10px; align-items: flex-start; color: var(--ink); font-size: 14.5px; margin: 6px 0; cursor: pointer; }
   label.tool input { width: auto; margin-top: 4px; flex: none; }
+  /* Me: mood & energy (colours from low to great) */
+  :root { --m1: #C2557A; --m2: #E3956E; --m3: #F2C14E; --m4: #A6CF6F; --m5: #3F8F4F; }
+  @media (prefers-color-scheme: dark) { :root { --m1: #D96A90; --m2: #E8A37C; --m3: #E3BE58; --m4: #98C870; --m5: #6FBF7C; } }
+  .dusk { position: relative; overflow: hidden; border-radius: 24px 6px 24px 6px; padding: 18px 18px 16px; margin: 12px 0; color: #F3EEDC; cursor: pointer;
+    background: radial-gradient(1.5px 1.5px at 18% 22%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 42% 12%, #fff 50%, transparent 51%),
+      radial-gradient(1.2px 1.2px at 63% 30%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 30% 45%, #fffbe6 50%, transparent 51%),
+      linear-gradient(165deg, #1B2742 0%, #36406E 58%, #B8736C 125%); }
+  .dusk.mini { margin: -4px 0 6px; padding: 14px 16px; cursor: default; }
+  .dusk .moon { position: absolute; right: 26px; top: 16px; width: 30px; height: 30px; border-radius: 50%; box-shadow: -7px 5px 0 0 #F6E7A8; }
+  .dusk .faces { font-size: 26px; margin: 4px 0; } .dusk .faces span { font-size: 14px; opacity: .85; }
+  .dusk .quote { font-family: "Young Serif", Georgia, serif; font-size: 16.5px; line-height: 1.35; margin: 10px 0 6px; }
+  .scale { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+  .sc { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 2px; border-radius: 16px; background: var(--card);
+    border: 1px solid var(--line); font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; min-width: 0; }
+  .sc span { font-size: 26px; line-height: 1.1; } .sc.on { background: var(--c); color: #1D3527; border-color: transparent; font-weight: 600; }
+  .sleep { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 3px; }
+  .sleep button { padding: 8px 0; border-radius: 10px; background: var(--card); border: 1px solid var(--line); font-size: 13px; min-width: 0; }
+  .sleep button.on { background: #6FA3B5; color: #fff; border-color: transparent; font-weight: 600; }
+  svg.chart { display: block; width: 100%; height: auto; } .chart .gl { stroke: var(--line); stroke-width: 1; } .chart .gt { fill: var(--muted); font-size: 10px; }
+  .pixels { display: grid; grid-template-columns: 11px repeat(31, minmax(0, 1fr)); gap: 2px; align-items: center; margin-bottom: 8px; }
+  .pixels i { display: block; aspect-ratio: 1; border-radius: 2px; background: var(--line); cursor: pointer; }
+  .pixels i.x { background: transparent; cursor: default; } .pixels i.f { background: transparent; box-shadow: inset 0 0 0 1px var(--line); cursor: default; }
+  .pixels .pm { font-size: 9.5px; color: var(--muted); line-height: 1; }
+  /* Wishlist */
+  .wish .wtop { display: flex; gap: 12px; cursor: pointer; } .wish.ready { border: 2px solid var(--pollen); }
+  .wpic { width: 64px; height: 64px; flex: none; border-radius: 14px 4px 14px 4px; object-fit: contain; background: #fff; display: grid; place-items: center; font-size: 30px; }
+  span.wpic { background: var(--accent-soft); }
+  .wbig { display: block; max-height: 180px; margin: 0 auto 6px; border-radius: 16px; background: #fff; }
+  .wish .btns .btn { padding: 10px 6px; }
+  .wish a { display: inline-block; margin-top: 8px; color: var(--leaf); font-weight: 600; text-decoration: none; }
   .photo-pick { display: block; text-align: center; padding: 16px; border: 2px dashed var(--line); border-radius: 16px; background: var(--card); color: var(--leaf); font-weight: 600; cursor: pointer; }
 </style>
 </head>
@@ -238,10 +268,12 @@
 
 <script>
 const KEY = "<?= key ?>";
+// What the server says the app was opened for (home-screen app, a shared link, the evening notification). Preview: nothing.
+const START = (() => { try { return JSON.parse(decodeURIComponent(escape(atob("<?= start ?>")))); } catch (e) { return {}; } })();
 const AREA = { Car: '🚗', Home: '🏠', Taxes: '🧾', Health: '🩺', Documents: '🪪', Insurance: '🛡️', Digital: '🌐',
                People: '🎂', SRL: '🏢', Subscriptions: '📺', Other: '📌' };
 const TABS = [['home', '🌱', 'Today'], ['money', '💰', 'Money'], ['dates', '📅', 'Dates'], ['trips', '✈️', 'Trips'],
-              ['projects', '🎨', 'Hobbies'], ['srl', '🏢', 'SRL', true]];
+              ['projects', '🎨', 'Hobbies'], ['me', '🌿', 'Me'], ['srl', '🏢', 'SRL', true]];
 const GROUP_COLORS = ['var(--leaf)', 'var(--pollen)', '#6FA3B5', 'var(--berry)', '#8C7AC9', 'var(--soil)', 'var(--muted)'];
 const BLOCKS = ['var(--b1)', 'var(--b2)', 'var(--b3)', 'var(--b4)', 'var(--b5)', 'var(--b6)', 'var(--b7)'];
 let D = null, TAB = 'home', SUB = null, SEG = {};
@@ -413,6 +445,11 @@ function applyLocal(action, d) {
   if (action === 'addRow' && Array.isArray(list)) { const r = Object.assign({ _row: --TMP, Owner: D.role }, d.values); list.push(r); return r; }
   if (action === 'updateRow' && Array.isArray(list)) { const r = list.find(x => x._row === d.row); if (r) Object.assign(r, d.values); return true; }
   if (action === 'deleteRow' && Array.isArray(list)) { D[d.tab.toLowerCase()] = list.filter(x => x._row !== d.row); return true; }
+  if (action === 'rate') {   // one evening per day: replace that day's rating or add it
+    const v = Object.assign({ Owner: D.role }, d.values), list = D.mood = D.mood || [], r = list.find(x => x.Date === v.Date);
+    if (r) { Object.assign(r, v); return true; }
+    const n = Object.assign({ _row: --TMP }, v); list.push(n); return n;
+  }
   if (action === 'answer') { const r = D.transactions.find(x => x._row === d.row); if (r) r.Category = d.category; return true; }
   if (action === 'markDone') {
     const r = D.dates.find(x => x._row === d.row), t = todayISO();
@@ -488,6 +525,7 @@ function render() {
   if (STALE) $('#banner').innerHTML += '<div class="updating">Updating…</div>';
   $('#view').innerHTML = VIEWS[TAB]();
   loadPhotos();
+  if (!STARTED) setTimeout(handleStart);
 }
 
 // ---------- money maths ----------
@@ -854,8 +892,8 @@ function viewDates() {
   if (SUB === 'need') setTimeout(() => { const e = $('#need'); if (e) e.scrollIntoView(); SUB = null; }, 50);
   return html;
 }
-function dateModal(row) {
-  const d = row ? D.dates.find(x => x._row === row) : { Area: 'Other', RepeatMonths: 12 };
+function dateModal(row, preset) {
+  const d = row ? D.dates.find(x => x._row === row) : Object.assign({ Area: 'Other', RepeatMonths: 12 }, preset || {});
   const reps = [[0, 'Does not repeat'], [1, 'Every month'], [3, 'Every 3 months'], [6, 'Every 6 months'], [12, 'Every year'], [24, 'Every 2 years'], [120, 'Every 10 years']];
   openModal(`<h3>${row ? 'Edit date' : 'New date'}</h3>
     <label>What</label><input id="dt" value="${esc(d.Title)}" placeholder="e.g. RCA renewal">
@@ -877,6 +915,7 @@ function saveDate(row) {
 
 // ---------- MONEY ----------
 function viewMoney() {
+  if (SUB === 'wish') return viewWish();
   const uns = D.transactions.filter(t => t.Category === 'Unsorted');
   const month = SEG.month || monthKey(0), year = month.slice(0, 4);
   const thisMonth = D.transactions.filter(t => spendTx(t) && String(t.Date).startsWith(month));
@@ -897,6 +936,7 @@ function viewMoney() {
     <button class="askbar" onclick="askModal()">🔍 Ask about your money, e.g. "car this year"</button>
     <button class="alert soft" onclick="insightsModal()">💡 ${insights().length} insights from your last 12 months</button>
     <div class="btns"><button class="btn" onclick="quickAdd()">+ Quick add</button><button class="btn ghost" onclick="importModal()">⬆ Import statement</button></div>
+    ${wishSummary()}
     ${uns.length ? `<h2>❓ Help me sort (${uns.length})</h2>${uns.slice(0, 5).map(unsortedCard).join('')}
       ${uns.length > 5 ? `<p class="muted small">${uns.length - 5} more after these. Each answer teaches SelfMate a rule.</p>` : ''}` : ''}
     <h2>Where it went</h2>
@@ -2285,7 +2325,480 @@ function insightsModal() {
     ${list.map(insightCard).join('') || '<p class="muted">Not enough data yet. Import a few months of statements first.</p>'}`);
 }
 
-const VIEWS = { home: viewHome, dates: viewDates, money: viewMoney, trips: viewTrips, projects: viewProjects, srl: viewSrl };
+// ---------- WISHLIST (inside Money): new wants wait a little before you decide ----------
+// A short wait lowers the urge to buy on impulse (desire cools with distance in time: Hoch & Loewenstein 1991;
+// a 25-hour delay lowered the urge and purchase intent in Moser 2020). The waits are yours to change in the list's ⚙️.
+const wishWait = price => +price >= (+D.settings.WishBigAmount || 500) ? (+D.settings.WishBigWait || 14) : (+D.settings.WishWait || 2);
+const wishes = () => D.wishlist || [];
+const isWaiting = w => !w.Status || w.Status === 'waiting';
+const isReady = w => isWaiting(w) && (!w.WaitUntil || days(w.WaitUntil) <= 0);
+const plusDays = n => { const d = new Date(todayISO() + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+function wishSummary() {
+  const r = wishes().filter(isReady).length, w = wishes().filter(x => isWaiting(x) && !isReady(x)).length;
+  return `<div class="row" onclick="go('money','wish')"><span class="emo">🛍️</span><div class="grow"><b>Wishlist</b>
+    <div class="muted small">${r || w ? [r ? r + ' ready to decide' : '', w ? w + ' waiting' : ''].filter(Boolean).join(' · ') : 'Want something? Let it wait here first.'}</div></div>
+    ${r ? '<span class="pill p-warn">' + r + '</span>' : '<span class="muted">›</span>'}</div>`;
+}
+function wishCard(w) {
+  const ready = isReady(w), left = w.WaitUntil ? days(w.WaitUntil) : 0, total = Math.max(1, w.Added && w.WaitUntil ? days(w.WaitUntil) - days(w.Added) : 1);
+  const pic = w.Image ? `<img class="wpic" src="${esc(w.Image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="wpic">🛍️</span>';
+  return `<div class="card wish ${ready ? 'ready' : ''}"><div class="wtop" onclick="wishModal(${w._row})">${pic}
+      <div class="grow"><b>${esc(w.Item)}</b><div class="muted small">${[+w.Price ? lei(w.Price) : '', esc(w.Shop)].filter(Boolean).join(' · ')}</div>
+      ${ready ? '<div class="small" style="color:var(--leaf);font-weight:600">Wait is over. Still want it?</div>'
+        : `<div class="small muted">Ready in ${left} day${left === 1 ? '' : 's'}</div>${bar((1 - left / total) * 100, 'var(--pollen)')}`}</div></div>
+    ${ready ? `<div class="btns"><button class="btn" onclick="decideWish(${w._row},'bought')">Buy it</button>
+      <button class="btn ghost" onclick="decideWish(${w._row},'dropped')">Let it go</button>
+      <button class="btn ghost" onclick="waitMore(${w._row})">Wait more</button></div>` : ''}
+    ${w.Link ? `<a class="small" href="${esc(w.Link)}" target="_blank" rel="noopener">Open in the shop ↗</a>` : ''}</div>`;
+}
+function viewWish() {
+  const list = wishes(), year = todayISO().slice(0, 4);
+  const ready = list.filter(isReady), waiting = list.filter(w => isWaiting(w) && !isReady(w)).sort((a, b) => a.WaitUntil < b.WaitUntil ? -1 : 1);
+  const done = list.filter(w => !isWaiting(w)).sort((a, b) => String(a.Decided) < String(b.Decided) ? 1 : -1);
+  const thisYear = done.filter(w => String(w.Decided).startsWith(year));
+  const kept = sum(thisYear.filter(w => w.Status === 'dropped'), w => w.Price), bought = sum(thisYear.filter(w => w.Status === 'bought'), w => w.Price);
+  const s = D.settings;
+  return `<button class="back" onclick="go('money')">← Money</button>
+    <h1>Wishlist</h1>
+    <p class="muted">New wants wait ${+s.WishWait || 2} days, or ${+s.WishBigWait || 14} days from ${lei(+s.WishBigAmount || 500)}. Most urges fade in a day or two; what is left is a real want.</p>
+    <div class="btns"><button class="btn" onclick="wishModal(0)">+ Add something</button>${D.role === 'owner' ? '<button class="btn ghost" style="flex:none" onclick="wishRulesModal()" aria-label="Waiting rules">⚙️</button>' : ''}</div>
+    <p class="muted small">Tip: in a shop's app or browser tap <b>Share → SelfMate</b> (needs the 🌱 home-screen app), or paste the link here.</p>
+    ${ready.length ? `<h2>Ready to decide (${ready.length})</h2>${ready.map(wishCard).join('')}` : ''}
+    ${waiting.length ? `<h2>Waiting (${waiting.length})</h2>${waiting.map(wishCard).join('')}` : ''}
+    ${!ready.length && !waiting.length ? '<p class="muted">Nothing waiting. 🌿</p>' : ''}
+    <h2>${year} so far</h2>
+    <div class="tiles" style="grid-template-columns:repeat(2,1fr)"><div class="tile"><b>${lei(kept)}</b><span>let go (${thisYear.filter(w => w.Status === 'dropped').length})</span></div>
+      <div class="tile"><b>${lei(bought)}</b><span>bought after waiting (${thisYear.filter(w => w.Status === 'bought').length})</span></div></div>
+    ${done.length ? `<h2>Decided</h2>${done.slice(0, 30).map(w => `<div class="row" onclick="wishModal(${w._row})"><span class="emo">${w.Status === 'bought' ? '🛒' : '🍃'}</span>
+      <div class="grow"><div>${esc(w.Item)}</div><div class="muted small">${w.Status === 'bought' ? 'Bought' : 'Let go'}${w.Decided ? ', ' + fmt(w.Decided) : ''}</div></div>
+      <b>${+w.Price ? lei(w.Price) : ''}</b></div>`).join('')}` : ''}`;
+}
+let WIMG = '';   // picture found on the shop page for the item being edited
+function wishModal(row, pre) {
+  const w = row ? wishes().find(x => x._row === row) : Object.assign({ Status: 'waiting' }, pre || {});
+  WIMG = w.Image || '';
+  const wait = row && w.WaitUntil ? Math.max(0, days(w.WaitUntil)) : wishWait(w.Price);
+  openModal(`<h3>${row ? 'Edit wish' : 'Add to wishlist'}</h3>
+    <div id="wpv">${WIMG ? `<img class="wbig" src="${esc(WIMG)}" alt="" referrerpolicy="no-referrer">` : ''}</div>
+    <label>Link (optional)</label><div class="inline"><input id="wl" type="url" inputmode="url" value="${esc(w.Link)}" placeholder="https://…">
+      <button class="btn ghost" id="wfill" onclick="fillFromLink()">Fill in</button></div>
+    <label>What</label><input id="wi" value="${esc(w.Item)}" placeholder="e.g. Rain jacket">
+    <div class="inline"><div style="flex:1"><label>Price (lei)</label><input id="wp" type="number" inputmode="decimal" value="${+w.Price || ''}" oninput="if(!${row || 0})$('#ww').value=wishWait(+this.value)"></div>
+      <div style="flex:1"><label>Shop</label><input id="ws" value="${esc(w.Shop)}"></div></div>
+    <div id="wcur" class="muted small"></div>
+    <label>Why I want it (optional)</label><input id="wn" value="${esc(w.Notes)}">
+    ${isWaiting(w) ? `<label>Wait (days from today)</label><input id="ww" type="number" inputmode="numeric" value="${wait}">` : ''}
+    ${row ? `<label>Status</label><select id="wst">${[['waiting', 'Still waiting / deciding'], ['bought', 'Bought'], ['dropped', 'Let go']].map(o => `<option value="${o[0]}" ${o[0] === (w.Status || 'waiting') ? 'selected' : ''}>${o[1]}</option>`).join('')}</select>` : ''}
+    <div class="btns"><button class="btn" onclick="saveWish(${row || 0})">${row ? 'Save' : 'Let it wait 🌱'}</button>
+      ${row ? `<button class="btn ghost" onclick="if(confirm('Remove this from the wishlist?'))act('deleteRow',{tab:'Wishlist',row:${row}},'Removed')">Remove</button>` : ''}</div>`);
+  if (!row && w.Link && !w.Price) fillFromLink();
+}
+async function fillFromLink() {
+  const url = val('wl'), btn = $('#wfill');
+  if (!url) return toast('Paste a link first');
+  if (btn) { btn.disabled = true; btn.textContent = 'Reading…'; }
+  const r = await call('peek', { url }).catch(() => null);
+  if (btn) { btn.disabled = false; btn.textContent = 'Fill in'; }
+  if (!r || !$('#wi')) return;
+  if (r.title && (!val('wi') || val('wi').length < 4 || /https?:/.test(val('wi')))) $('#wi').value = r.title;
+  if (r.shop && !val('ws')) $('#ws').value = r.shop;
+  if (r.price) {
+    const rate = rateOf(r.currency || 'RON');
+    $('#wp').value = rate ? Math.round(r.price * rate) : r.price;
+    $('#wcur').textContent = r.currency && r.currency !== 'RON' ? (rate ? `Converted from ${r.price} ${r.currency}.` : `The shop says ${r.price} ${r.currency}: add a rate in ⚙️ Customise, or type the lei.`) : '';
+    if ($('#ww')) $('#ww').value = wishWait(+$('#wp').value);
+  }
+  if (r.image) { WIMG = r.image; $('#wpv').innerHTML = `<img class="wbig" src="${esc(r.image)}" alt="" referrerpolicy="no-referrer">`; }
+  toast(r.title || r.price ? 'Filled in from the page ✓' : 'The shop did not say. Type the name and price.');
+}
+function saveWish(row) {
+  const v = { Item: val('wi'), Price: +val('wp') || '', Link: val('wl'), Shop: val('ws'), Notes: val('wn'), Image: WIMG };
+  if (!v.Item) return toast('What is it?');
+  if ($('#ww')) v.WaitUntil = plusDays(Math.max(0, Math.round(+val('ww') || 0)));
+  if (!row) return add('Wishlist', Object.assign(v, { Added: todayISO(), Status: 'waiting' }), 'Added. Let it wait 🌱');
+  const old = wishes().find(x => x._row === row), st = val('wst');
+  v.Status = st;
+  if (st !== 'waiting' && (old.Status || 'waiting') === 'waiting') v.Decided = todayISO();
+  if (st === 'waiting') v.Decided = '';
+  upd('Wishlist', row, v, 'Saved ✓');
+}
+function waitMore(row) { const w = wishes().find(x => x._row === row); upd('Wishlist', row, { WaitUntil: plusDays(wishWait(w.Price)) }, 'Waiting a bit longer ⏳'); }
+function decideWish(row, status) {
+  const w = wishes().find(x => x._row === row);
+  act('updateRow', { tab: 'Wishlist', row, values: { Status: status, Decided: todayISO() } }, status === 'bought' ? 'Enjoy it ✓' : 'Let go 🍃');   // shows at once
+  if (status === 'dropped' && +w.Price && D.goals.length) openModal(`<h3>🍃 You kept ${lei(w.Price)}</h3>
+    <p class="muted">Money you don't spend is easy to spend on something else. Moving it to a goal makes it count.</p>
+    <p class="small">Did you move it to one of these?</p>
+    <div class="chips">${D.goals.map(g => `<button class="chip" onclick="addToGoal(${g._row},${+w.Price})">${esc(g.Emoji)} ${esc(g.Goal)}</button>`).join('')}</div>
+    <div class="btns"><button class="btn ghost" onclick="closeModal()">Not now</button></div>`);
+}
+function addToGoal(row, amount) {
+  const g = D.goals.find(x => x._row === row);
+  if (g) upd('Goals', row, { Saved: (+g.Saved || 0) + amount }, lei(amount) + ' added to ' + g.Goal + ' 🌱');
+}
+function wishRulesModal() {
+  const s = D.settings;
+  openModal(`<h3>⏳ How long wants wait</h3>
+    <label>Most things (days)</label><input id="wr1" type="number" inputmode="numeric" value="${+s.WishWait || 2}">
+    <label>Big purchases from (lei)</label><input id="wr2" type="number" inputmode="numeric" value="${+s.WishBigAmount || 500}">
+    <label>Big purchases wait (days)</label><input id="wr3" type="number" inputmode="numeric" value="${+s.WishBigWait || 14}">
+    <div class="btns"><button class="btn" onclick="saveWishRules()">Save</button></div>
+    <p class="muted small">Changes apply to things you add from now on. A wait of at least a day gives the urge time to cool.</p>`);
+}
+async function saveWishRules() {
+  const pairs = [['WishWait', Math.max(0, +val('wr1') || 0)], ['WishBigAmount', +val('wr2') || 0], ['WishBigWait', Math.max(0, +val('wr3') || 0)]];
+  closeModal();
+  for (const p of pairs) await call('setSetting', { key: p[0], value: p[1] });
+  toast('Saved ✓'); await load();
+}
+// Text shared from another app ("Rain jacket https://shop.ro/...") → a filled-in wish
+function sharedWish(text) {
+  const url = (String(text).match(/https?:\/\/[^\s"'<>]+/) || [''])[0];
+  const name = String(text).replace(url, '').replace(/\s+/g, ' ').replace(/^["'«“]|["'»”]$/g, '').trim().slice(0, 160);
+  go('money', 'wish');
+  wishModal(0, { Link: url, Item: name });
+}
+
+// ---------- ME: mood & energy, health (personal: only you ever see yours) ----------
+const MOODS = [['😣', 'Very low'], ['😕', 'Low'], ['😐', 'Okay'], ['🙂', 'Good'], ['😄', 'Great']];
+const ENERGY = [['😴', 'Drained'], ['🥱', 'Low'], ['🙂', 'Okay'], ['💪', 'Good'], ['⚡', 'Full']];
+const mk = k => (D.role === 'owner' ? '' : 'Partner') + k;   // my own setting's name (MoodTime / PartnerMoodTime)
+const moodTags = () => String(D.settings[mk('MoodTags')] || 'Work, Exercise, Outdoors, Friends, Family, Partner, Rest, Screens, Alcohol, Stress, Sick, Money worries')
+  .split(',').map(x => x.trim()).filter(Boolean);
+const moods = () => (D.mood || []).slice().sort((a, b) => a.Date < b.Date ? -1 : 1);
+const moodOn = iso => (D.mood || []).find(m => m.Date === iso);
+const avg = a => a.length ? sum(a, x => x) / a.length : 0;
+const num1s = n => (Math.round(n * 10) / 10).toLocaleString('en-GB');
+const isoBack = n => plusDays(-n);
+
+function viewMe() {
+  const seg = SEG.me || 'mood';
+  return `<div class="label">${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+    <h1>How you're doing</h1>
+    <div class="seg">${[['mood', '🌙 Mood & energy'], ['health', '🩺 Health']].map(x => `<button class="${x[0] === seg ? 'on' : ''}" onclick="SEG.me='${x[0]}';render()">${x[1]}</button>`).join('')}</div>
+    ${seg === 'mood' ? viewMood() : viewHealth()}
+    <p class="muted small" style="margin-top:24px">🔒 Only you see this page. It is never shown to ${D.role === 'owner' ? 'your partner' : 'the owner'}, not even while sharing.</p>`;
+}
+
+// One quick evening rating: mood and energy (the two main dimensions of how we feel, Russell 1980 / the Affect Grid,
+// Russell, Weiss & Mendelsohn 1989) and last night's sleep on 0–10 (like the Single-Item Sleep Quality Scale, Snyder 2018).
+function viewMood() {
+  const t = moodOn(todayISO()), list = moods(), p = D.push || {};
+  const line = tonightLine();
+  const today = t
+    ? `<div class="dusk" onclick="rateModal('${todayISO()}')"><div class="moon"></div><div class="label" style="color:inherit;opacity:.8">Today</div>
+        <div class="faces">${MOODS[t.Mood - 1][0]} <span>${MOODS[t.Mood - 1][1]} mood</span> · ${ENERGY[t.Energy - 1][0]} <span>${ENERGY[t.Energy - 1][1]} energy</span></div>
+        ${line ? `<p class="quote">“${esc(line)}”</p>` : ''}<div class="small" style="opacity:.75">Tap to change</div></div>`
+    : `<div class="dusk"><div class="moon"></div><div class="label" style="color:inherit;opacity:.8">Tonight</div>
+        <div class="serif" style="font-size:24px;line-height:1.2;margin:4px 0 10px">How was your day?</div>
+        <button class="btn" style="background:#F6E7A8;color:#1D2A44" onclick="rateModal('${todayISO()}')">Rate my day · 20 seconds</button></div>`;
+  const reminder = `<div class="row" onclick="moodSettingsModal()"><span class="emo">🔔</span><div class="grow"><div>Evening reminder ${p.on === false ? 'off' : 'at ' + esc(p.time || '21:00')}</div>
+    <div class="muted small">${p.devices ? p.devices + ' phone' + (p.devices > 1 ? 's' : '') + ' get it' : 'Not on any phone yet. Tap to turn it on.'}</div></div><span class="muted">›</span></div>`;
+  if (list.length < 2) return today + reminder + `<h2>What you'll see here</h2><div class="card small muted">After a few evenings: your mood, energy and sleep over the last month,
+    a year in colour, and patterns, like how sleep, exercise or a busy day go with your mood, and whether low days cost more money.</div>`;
+  return today + lowMoodNote() + reminder +
+    `<h2>Last 30 days</h2><div class="card">${moodChart(30)}
+      <div class="chips small"><span><i class="dot" style="background:var(--m5)"></i>Mood</span><span><i class="dot" style="background:var(--pollen)"></i>Energy</span><span><i class="dot" style="background:#6FA3B5"></i>Sleep</span></div></div>
+    <h2>Your year in colour</h2>${yearPixels(SEG.my || todayISO().slice(0, 4))}
+    ${moodPatterns()}
+    <h2>Recent evenings</h2>${list.slice(-7).reverse().map(m => `<div class="row" onclick="rateModal('${m.Date}')"><span class="emo">${MOODS[m.Mood - 1][0]}</span>
+      <div class="grow"><div>${fmt(m.Date)}</div><div class="muted small">${[ENERGY[m.Energy - 1][1] + ' energy', m.Sleep !== '' && m.Sleep != null ? 'slept ' + m.Sleep + '/10' : '', esc(m.Tags)].filter(Boolean).join(' · ')}</div>
+      ${m.Note ? `<div class="small">${esc(m.Note)}</div>` : ''}</div></div>`).join('')}`;
+}
+function tonightLine() {
+  const l = (D.lines || []).map(x => String(x.Line || '').trim()).filter(Boolean);
+  if (!l.length) return '';
+  const n = Math.floor(new Date(todayISO() + 'T00:00:00Z').getTime() / 864e5) + (D.role === 'owner' ? 0 : 7);
+  return l[n % l.length];
+}
+let RATE = null;   // the rating being filled in
+function rateModal(day) {
+  const m = moodOn(day);
+  RATE = { day, Mood: m ? +m.Mood : 0, Energy: m ? +m.Energy : 0, Sleep: m && m.Sleep !== '' ? +m.Sleep : '', tags: new Set(m ? String(m.Tags || '').split(',').map(x => x.trim()).filter(Boolean) : []) };
+  const scale = (key, opts) => `<div class="scale" id="sc_${key}">${opts.map((o, i) => `<button class="sc ${RATE[key] === i + 1 ? 'on' : ''}" style="--c:var(--m${i + 1})"
+      onclick="RATE.${key}=${i + 1};markScale('${key}')"><span>${o[0]}</span>${o[1]}</button>`).join('')}</div>`;
+  const tags = [...new Set(moodTags().concat([...RATE.tags]))];
+  openModal(`<div class="dusk mini"><div class="moon"></div><div class="label" style="color:inherit;opacity:.85">${day === todayISO() ? 'Tonight' : fmt(day)}</div>
+      <div class="serif" style="font-size:22px">How was your day?</div></div>
+    <label>Mood</label>${scale('Mood', MOODS)}
+    <label>Energy</label>${scale('Energy', ENERGY)}
+    <label>Sleep last night (0 = terrible, 10 = excellent)</label>
+    <div class="sleep" id="sc_Sleep">${Array.from({ length: 11 }, (_, i) => `<button class="${RATE.Sleep === i ? 'on' : ''}" onclick="RATE.Sleep=RATE.Sleep===${i}?'':${i};markSleep()">${i}</button>`).join('')}</div>
+    <label>What was part of today? (optional)</label>
+    <div class="chips" id="rtags">${tags.map(t => `<button class="chip ${RATE.tags.has(t) ? 'on' : ''}" onclick="RATE.tags.has(this.dataset.t)?RATE.tags.delete(this.dataset.t):RATE.tags.add(this.dataset.t);this.classList.toggle('on')" data-t="${esc(t)}">${esc(t)}</button>`).join('')}</div>
+    <label>One line about today (optional)</label><input id="rn" value="${esc(m && m.Note)}" placeholder="e.g. Long walk with a friend">
+    <div class="btns"><button class="btn" onclick="saveRating()">Save</button>
+      ${m ? `<button class="btn ghost" onclick="if(confirm('Delete this evening?'))act('deleteRow',{tab:'Mood',row:${m._row}},'Deleted')">Delete</button>` : ''}</div>`);
+}
+function markScale(key) { document.querySelectorAll('#sc_' + key + ' .sc').forEach((b, i) => b.classList.toggle('on', RATE[key] === i + 1)); }
+function markSleep() { document.querySelectorAll('#sc_Sleep button').forEach((b, i) => b.classList.toggle('on', RATE.Sleep === i)); }
+async function saveRating() {
+  if (!RATE.Mood || !RATE.Energy) return toast('Pick your mood and your energy');
+  const r = RATE, first = !moodOn(r.day);
+  await act('rate', { values: { Date: r.day, Mood: r.Mood, Energy: r.Energy, Sleep: r.Sleep, Tags: [...r.tags].join(', '), Note: val('rn') } }, first ? 'Saved. Sleep well 🌙' : 'Updated ✓');
+  RATE = null;
+}
+// Gentle note after two weeks of mostly low days ("more than half the days", as in the PHQ-2 screening questions).
+function lowMoodNote() {
+  const last = (D.mood || []).filter(m => m.Date >= isoBack(13));
+  if (last.filter(m => +m.Mood <= 2).length < 8) return '';
+  return `<div class="card" style="border-color:var(--berry)"><b>Your mood has been low on most days for two weeks.</b>
+    <p class="small" style="margin:6px 0 0">That is worth talking about, with someone you trust or your family doctor. It is common and it can get better with help.
+    ${esc(D.settings.SupportLine || 'If you ever feel unsafe: 112. Free emotional support: 0800 801 200 (TelVerde Antisuicid).')}</p></div>`;
+}
+// One SVG chart, used for mood and for health measurements. series: [{ pts: [[iso, value]], color }]; gaps stay gaps.
+function lineChart(series, from, to, lo, hi, opt) {
+  opt = opt || {};
+  const W = 320, H = opt.h || 130, L = opt.left || 8, R = 8, T = 10, B = 18, span = Math.max(1, days(to) - days(from));
+  const x = iso => L + (days(iso) - days(from)) / span * (W - L - R), y = v => T + (1 - (v - lo) / (hi - lo || 1)) * (H - T - B);
+  let g = '';
+  (opt.grid || []).forEach(v => { g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" class="gl"/>` + (opt.left ? `<text x="${L - 4}" y="${y(v) + 4}" text-anchor="end" class="gt">${v}</text>` : ''); });
+  const ticks = opt.ticks || [from, to];
+  ticks.forEach(t => { g += `<text x="${Math.min(W - R - 14, Math.max(L + 14, x(t)))}" y="${H - 3}" text-anchor="middle" class="gt">${new Date(t + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</text>`; });
+  series.forEach(s => {
+    const pts = s.pts.filter(p => p[1] !== '' && p[1] != null && !isNaN(p[1])).sort((a, b) => a[0] < b[0] ? -1 : 1);
+    let seg = [], prev = null;
+    const flush = () => { if (seg.length > 1) g += `<polyline points="${seg.join(' ')}" fill="none" stroke="${s.color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"${s.dash ? ' stroke-dasharray="5 4"' : ''}/>`; seg = []; };
+    pts.forEach(p => { if (prev && days(p[0]) - days(prev) > (opt.gap || 3)) flush(); seg.push(x(p[0]).toFixed(1) + ',' + y(p[1]).toFixed(1)); prev = p[0]; });
+    flush();
+    pts.forEach(p => { g += `<circle cx="${x(p[0]).toFixed(1)}" cy="${y(p[1]).toFixed(1)}" r="${pts.length > 40 ? 1.8 : 3}" fill="${s.color}"/>`; });
+  });
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opt.label || 'Chart')}">${g}</svg>`;
+}
+function moodChart(n) {
+  const from = isoBack(n - 1), to = todayISO(), list = moods().filter(m => m.Date >= from);
+  return lineChart([{ color: '#6FA3B5', pts: list.map(m => [m.Date, m.Sleep === '' || m.Sleep == null ? null : 1 + m.Sleep * 0.4]) },
+                    { color: 'var(--pollen)', dash: true, pts: list.map(m => [m.Date, +m.Energy]) },
+                    { color: 'var(--m5)', pts: list.map(m => [m.Date, +m.Mood]) }],
+    from, to, 1, 5, { grid: [1, 3, 5], ticks: [from, isoBack(Math.round(n / 2)), to], label: 'Mood, energy and sleep, last ' + n + ' days' });
+}
+// "Year in pixels": one small square per day, coloured by mood. Tap a day to rate or change it.
+function yearPixels(year) {
+  const years = [...new Set((D.mood || []).map(m => String(m.Date).slice(0, 4)).concat([todayISO().slice(0, 4)]))].sort();
+  const t = todayISO(), map = {};
+  (D.mood || []).forEach(m => map[m.Date] = m);
+  let cells = '';
+  for (let mo = 1; mo <= 12; mo++) {
+    const n = new Date(+year, mo, 0).getDate();
+    cells += `<span class="pm">${monthName(year + '-' + String(mo).padStart(2, '0')).slice(0, 1)}</span>`;
+    for (let d = 1; d <= 31; d++) {
+      const iso = year + '-' + String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0'), m = map[iso];
+      cells += d > n ? '<i class="x"></i>' : iso > t ? '<i class="f"></i>'
+        : `<i style="${m ? 'background:var(--m' + m.Mood + ')' : ''}" onclick="rateModal('${iso}')" title="${fmt(iso)}"></i>`;
+    }
+  }
+  return `${years.length > 1 ? `<div class="chips">${years.map(y => `<button class="chip ${y === year ? 'on' : ''}" onclick="SEG.my='${y}';render()">${y}</button>`).join('')}</div>` : ''}
+    <div class="card"><div class="pixels">${cells}</div>
+    <div class="chips small" style="margin-bottom:0">${MOODS.map((x, i) => `<span><i class="dot" style="background:var(--m${i + 1})"></i>${x[1]}</span>`).join('')}</div></div>`;
+}
+// Patterns from your own evenings: weekdays, sleep, tags, and money on low vs good days.
+function moodPatterns() {
+  const list = moods();
+  if (list.length < 7) return `<h2>Patterns</h2><p class="muted small">Patterns appear after a week of evenings (${list.length} so far).</p>`;
+  const out = [];
+  const wd = [1, 2, 3, 4, 5, 6, 0].map(d => list.filter(m => new Date(m.Date + 'T12:00:00').getDay() === d).map(m => +m.Mood));
+  const wdAvg = wd.map(avg), names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const week = `<div class="card"><div class="label">Average mood by weekday</div><div class="cols" style="min-height:96px">${wdAvg.map((a, i) =>
+    `<div><b style="height:${a ? (a - 0.5) / 4.5 * 60 : 0}px;background:${a ? 'var(--m' + Math.round(a) + ')' : 'transparent'}"></b>${names[i]}<br>${a ? num1s(a) : '–'}</div>`).join('')}</div></div>`;
+  const slept = list.filter(m => m.Sleep !== '' && m.Sleep != null);
+  const good = slept.filter(m => +m.Sleep >= 7).map(m => +m.Mood), poor = slept.filter(m => +m.Sleep <= 4).map(m => +m.Mood);
+  if (good.length >= 3 && poor.length >= 3) out.push(`😴 After a good night (7+), your mood averages <b>${num1s(avg(good))}</b>; after a poor one (4 or less), <b>${num1s(avg(poor))}</b>.`);
+  const tags = {};
+  list.forEach(m => String(m.Tags || '').split(',').map(x => x.trim()).filter(Boolean).forEach(t => (tags[t] = tags[t] || []).push(m)));
+  Object.keys(tags).map(t => {
+    const w = tags[t].map(m => +m.Mood), wo = list.filter(m => !tags[t].includes(m)).map(m => +m.Mood);
+    return { t, d: avg(w) - avg(wo), n: w.length, ok: w.length >= 3 && wo.length >= 3, w: avg(w), wo: avg(wo) };
+  }).filter(x => x.ok && Math.abs(x.d) >= 0.3).sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 3)
+    .forEach(x => out.push(`${x.d > 0 ? '🌿' : '🌧️'} On days with <b>${esc(x.t)}</b> (${x.n}), your mood averages ${num1s(x.w)}, against ${num1s(x.wo)} without.`));
+  // spending: only days the bank data already covers, and only everyday spending of your own
+  const upTo = dataUpTo().oldest, spend = {};
+  D.transactions.filter(t => spendTx(t) && catOf(t.Category).Type === 'flex' && isMine(t) && !t.Trip).forEach(t => spend[t.Date] = (spend[t.Date] || 0) - t.Amount);
+  const covered = list.filter(m => upTo && m.Date <= upTo);
+  const lowD = covered.filter(m => +m.Mood <= 2).map(m => spend[m.Date] || 0), goodD = covered.filter(m => +m.Mood >= 4).map(m => spend[m.Date] || 0);
+  if (lowD.length >= 3 && goodD.length >= 3) {
+    const a = avg(lowD), b = avg(goodD);
+    out.push(`💸 On low-mood days you spent about <b>${lei(a)}</b> on everyday things, on good days <b>${lei(b)}</b>.` +
+      (a > b * 1.2 ? ' Sadness makes buying feel more rewarding than it is: a reason to let wants wait on the wishlist.' : ''));
+  }
+  return `<h2>Patterns</h2>${week}${out.map(x => `<div class="card small">${x}</div>`).join('')}
+    <p class="muted small">From your own evenings: patterns, not proof of cause. They get clearer with more days.</p>`;
+}
+function moodSettingsModal() {
+  const p = D.push || {};
+  openModal(`<h3>🔔 Evening reminder</h3>
+    <label>Time</label><input id="mt" type="time" value="${esc(p.time || '21:00')}">
+    <label class="tool"><input id="mon" type="checkbox" ${p.on === false ? '' : 'checked'}> Remind me if I haven't rated by then</label>
+    <label>Things to tick (comma separated)</label><input id="mtg" value="${esc(moodTags().join(', '))}">
+    <div class="btns"><button class="btn" onclick="saveMoodSettings()">Save</button></div>
+    <h2>This phone</h2>
+    ${START.home ? `<p class="muted small">${PUSHHERE ? '✓ This phone gets the reminder.' : 'Allow notifications when your phone asks.'}</p>
+      <div class="btns">${PUSHHERE ? '<button class="btn ghost" onclick="pushBridge(\'push-off\')">Turn off here</button>' : '<button class="btn" onclick="pushBridge(\'push-on\')">Turn on notifications</button>'}
+      ${p.devices ? '<button class="btn ghost" onclick="pushTest(this)">Send a test</button>' : ''}</div>`
+    : `<p class="muted small">Notifications come through the 🌱 SelfMate home-screen app. Open SelfMate from that icon, then turn them on here.
+      ${p.devices ? `Already on ${p.devices} phone${p.devices > 1 ? 's' : ''}.` : ''}</p>${p.devices ? '<div class="btns"><button class="btn ghost" onclick="pushTest(this)">Send a test</button></div>' : ''}`}
+    <h2>Evening lines (${(D.lines || []).length})</h2>
+    <p class="muted small">One a day in the notification and on this page. Add your own, change or delete any.</p>
+    <button class="btn ghost wide" onclick="linesModal()">See and edit the lines</button>`);
+}
+async function saveMoodSettings() {
+  const pairs = [[mk('MoodTime'), val('mt') || '21:00'], [mk('MoodPush'), $('#mon').checked ? 'on' : 'off'], [mk('MoodTags'), val('mtg')]];
+  closeModal();
+  for (const p of pairs) await call('setSetting', { key: p[0], value: p[1] });
+  toast('Saved ✓'); await load();
+}
+function linesModal() {
+  openModal(`<h3>🌙 Evening lines</h3><button class="btn wide" onclick="lineModal(0)">+ Add a line</button>
+    ${(D.lines || []).map(l => `<div class="row" onclick="lineModal(${l._row})"><div class="grow small">${esc(l.Line)}</div></div>`).join('')}`);
+}
+function lineModal(row) {
+  const l = row ? D.lines.find(x => x._row === row) : {};
+  openModal(`<h3>${row ? 'Edit line' : 'New line'}</h3><textarea id="ln" rows="3" maxlength="200">${esc(l.Line)}</textarea>
+    <div class="btns"><button class="btn" onclick="if(!val('ln'))return toast('Write something');${row ? `upd('Lines',${row},{Line:val('ln')},'Saved ✓')` : `add('Lines',{Line:val('ln')},'Added ✓')`}">Save</button>
+      ${row ? `<button class="btn ghost" onclick="if(confirm('Delete this line?'))act('deleteRow',{tab:'Lines',row:${row}},'Deleted')">Delete</button>` : ''}</div>`);
+}
+// Notifications belong to the home-screen app around SelfMate (another web address): ask it through a message.
+let PUSHHERE = false, PUSHWAIT = 0;
+function pushBridge(what) {
+  if (window.top === window) return toast('Open SelfMate from the 🌱 home-screen app first');
+  window.top.postMessage({ selfmate: what }, '*');
+  toast(what === 'push-on' ? 'Asking your phone…' : 'Turning off…');
+  clearTimeout(PUSHWAIT);
+  PUSHWAIT = setTimeout(() => toast('⚠️ No answer from the home-screen app. Reinstall it from the home page, then try again.'), 20000);
+}
+window.addEventListener('message', e => {
+  const m = e.data || {};
+  if (m.selfmate !== 'push-status') return;
+  clearTimeout(PUSHWAIT);
+  PUSHHERE = !!m.subscribed;
+  if (m.error) toast('⚠️ ' + m.error);
+  else if (m.changed) { toast(PUSHHERE ? 'Notifications on 🔔' : 'Notifications off on this phone'); load().then(() => { if (!$('#modal').classList.contains('hidden')) moodSettingsModal(); }); }
+});
+async function pushTest(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  const r = await call('pushTest').catch(() => null);
+  if (btn) { btn.disabled = false; btn.textContent = 'Send a test'; }
+  if (r) toast(r.sent ? `Sent to ${r.sent} phone${r.sent > 1 ? 's' : ''} 🔔` : '⚠️ No phone accepted it. Turn notifications on again on this phone.');
+}
+
+// ---------- HEALTH ----------
+// Medicines with a "runs out" date (reminders roughly double adherence: Thakkar et al. 2016), check-ups from Dates,
+// measurements with a chart (self-monitoring helps most as part of a plan: Madigan et al. 2015), and a log of visits and results.
+const MEASURE_KINDS = [['Weight', 'kg'], ['Blood pressure', 'mmHg'], ['Resting pulse', 'bpm'], ['Blood sugar', 'mg/dL']];
+function runsOut(m) {
+  if (!(+m.PerDay > 0) || m.Stock === '' || m.Stock == null || !m.StockDate) return null;
+  return plusDays(Math.floor(+m.Stock / +m.PerDay) + days(m.StockDate));
+}
+function viewHealth() {
+  const meds = (D.medicines || []).filter(m => m.Active !== 'no'), stopped = (D.medicines || []).filter(m => m.Active === 'no');
+  const checks = D.dates.filter(d => d.Area === 'Health').sort((a, b) => (a.Due || '9') < (b.Due || '9') ? -1 : 1);
+  const kinds = [...new Set((D.measures || []).map(x => x.Kind).filter(Boolean))];
+  const kind = kinds.includes(SEG.mk) ? SEG.mk : kinds[0];
+  const log = (D.healthlog || []).slice().sort((a, b) => a.Date < b.Date ? 1 : -1);
+  const LOGT = { visit: '🩺', result: '🧪', vaccine: '💉', symptom: '🤒' };
+  return `<h2>💊 Medicines</h2>
+    ${meds.map(m => { const end = runsOut(m), n = end ? days(end) : null;
+      return `<div class="row" onclick="medModal(${m._row})"><span class="emo">💊</span><div class="grow"><b>${esc(m.Name)}</b>
+        <div class="muted small">${[esc(m.Dose), esc(m.When)].filter(Boolean).join(' · ')}</div></div>
+        ${n === null ? '' : `<span class="pill ${n <= 7 ? 'p-bad' : n <= 14 ? 'p-warn' : 'p-ok'}">${n < 0 ? 'ran out' : n === 0 ? 'last day' : n + 'd left'}</span>`}</div>`; }).join('') || '<p class="muted small">None. Add the ones you take regularly to see when they run out.</p>'}
+    <button class="btn ghost wide" onclick="medModal(0)">+ Add a medicine</button>
+    ${stopped.length ? `<p class="muted small">Stopped: ${stopped.map(m => `<button class="back small" onclick="medModal(${m._row})">${esc(m.Name)}</button>`).join(', ')}</p>` : ''}
+    <h2>🗓️ Check-ups</h2>
+    ${checks.map(dateRow).join('') || '<p class="muted small">No check-ups yet.</p>'}
+    <button class="btn ghost wide" onclick="dateModal(0,{Area:'Health',RepeatMonths:12})">+ Add a check-up</button>
+    <h2>📈 Measurements</h2>
+    ${kinds.length ? `<div class="chips">${kinds.map(k => `<button class="chip ${k === kind ? 'on' : ''}" onclick="SEG.mk=this.dataset.k;render()" data-k="${esc(k)}">${esc(k)}</button>`).join('')}</div>
+      ${measureCard(kind)}` : '<p class="muted small">Weight, blood pressure, pulse or anything else your doctor asked you to watch.</p>'}
+    <button class="btn ghost wide" onclick="measureModal(0,'${kind ? esc(kind).replace(/'/g, '') : ''}')">+ Add a measurement</button>
+    <h2>🗂️ Visits & results</h2>
+    ${log.slice(0, 20).map(h => `<div class="row" onclick="hlogModal(${h._row})"><span class="emo">${LOGT[h.Type] || '🩺'}</span><div class="grow"><div>${esc(h.Title)}</div>
+      <div class="muted small">${[fmt(h.Date), esc(h.Doctor)].filter(Boolean).join(' · ')}</div>${h.Notes ? `<div class="small">${esc(h.Notes)}</div>` : ''}</div></div>`).join('') || '<p class="muted small">Write down what the doctor said or what a result showed, so it is there next time.</p>'}
+    <button class="btn ghost wide" onclick="hlogModal(0)">+ Add a visit or result</button>`;
+}
+function measureCard(kind) {
+  const rows = (D.measures || []).filter(x => x.Kind === kind).sort((a, b) => a.Date < b.Date ? -1 : 1);
+  if (!rows.length) return '';
+  const last = rows[rows.length - 1], unit = esc(last.Unit || ''), two = rows.some(r => r.Value2 !== '' && r.Value2 != null);
+  const vals = rows.flatMap(r => [+r.Value, two && r.Value2 !== '' ? +r.Value2 : null]).filter(v => v !== null && !isNaN(v));
+  const lo = Math.min(...vals), hi = Math.max(...vals), pad = Math.max(1, (hi - lo) * 0.15);
+  const from = rows[0].Date < isoBack(365) ? isoBack(365) : rows[0].Date, to = todayISO();
+  const shown = rows.filter(r => r.Date >= from);
+  const chart = shown.length > 1 ? lineChart([{ color: 'var(--leaf)', pts: shown.map(r => [r.Date, +r.Value]) }].concat(two ? [{ color: 'var(--berry)', pts: shown.map(r => [r.Date, r.Value2 === '' ? null : +r.Value2]) }] : []),
+    from, to, Math.floor(lo - pad), Math.ceil(hi + pad), { left: 30, grid: [Math.round(lo), Math.round(hi)], gap: 3650, label: kind + ' over time' }) : '';
+  return `<div class="card"><div class="label">Latest, ${fmt(last.Date)}</div><div class="big">${esc(last.Value)}${two && last.Value2 !== '' ? '/' + esc(last.Value2) : ''} <span class="small muted">${unit}</span></div>
+    ${chart}${rows.slice(-5).reverse().map(r => `<div class="pick" style="cursor:pointer" onclick="measureModal(${r._row})"><span class="grow">${fmt(r.Date)}${r.Note ? ' · ' + esc(r.Note) : ''}</span>
+      <b>${esc(r.Value)}${r.Value2 !== '' && r.Value2 != null ? '/' + esc(r.Value2) : ''}</b></div>`).join('')}</div>`;
+}
+function medModal(row) {
+  const m = row ? D.medicines.find(x => x._row === row) : {};
+  const end = row ? runsOut(m) : null;
+  openModal(`<h3>${row ? esc(m.Name) : 'New medicine'}</h3>
+    <label>Name</label><input id="mn" value="${esc(m.Name)}">
+    <div class="inline"><div style="flex:1"><label>Dose</label><input id="md" value="${esc(m.Dose)}" placeholder="e.g. 10 mg"></div>
+      <div style="flex:1"><label>When</label><input id="mw" value="${esc(m.When)}" placeholder="e.g. morning"></div></div>
+    <div class="inline"><div style="flex:1"><label>Pills a day</label><input id="mpd" type="number" inputmode="decimal" value="${esc(m.PerDay)}"></div>
+      <div style="flex:1"><label>Pills left today</label><input id="mst" type="number" inputmode="decimal" value="${row && end ? Math.max(0, +m.Stock - +m.PerDay * -days(m.StockDate)) : esc(m.Stock)}"></div></div>
+    ${end ? `<p class="muted small">At this rate they run out around <b>${fmt(end)}</b>. After a refill, type the new number of pills.</p>` : ''}
+    <label>Notes</label><input id="mno" value="${esc(m.Notes)}">
+    ${row ? `<label class="tool"><input id="mac" type="checkbox" ${m.Active === 'no' ? 'checked' : ''}> I stopped taking it</label>` : ''}
+    <div class="btns"><button class="btn" onclick="saveMed(${row || 0})">Save</button>
+      ${row ? `<button class="btn ghost" onclick="if(confirm('Delete this medicine?'))act('deleteRow',{tab:'Medicines',row:${row}},'Deleted')">Delete</button>` : ''}</div>`);
+}
+function saveMed(row) {
+  const v = { Name: val('mn'), Dose: val('md'), When: val('mw'), PerDay: val('mpd') === '' ? '' : +val('mpd'), Stock: val('mst') === '' ? '' : +val('mst'), StockDate: todayISO(), Notes: val('mno') };
+  if (!v.Name) return toast('Give it a name');
+  if ($('#mac')) v.Active = $('#mac').checked ? 'no' : '';
+  row ? upd('Medicines', row, v, 'Saved ✓') : add('Medicines', v, 'Added ✓');
+}
+function measureModal(row, kind) {
+  const r = row ? D.measures.find(x => x._row === row) : { Kind: kind || 'Weight', Date: todayISO() };
+  const known = [...new Set(MEASURE_KINDS.map(k => k[0]).concat((D.measures || []).map(x => x.Kind)))];
+  const unitOf = k => ((D.measures || []).find(x => x.Kind === k && x.Unit) || {}).Unit || (MEASURE_KINDS.find(x => x[0] === k) || [])[1] || '';
+  openModal(`<h3>${row ? 'Edit measurement' : 'New measurement'}</h3>
+    <label>What</label><input id="mk" list="mkl" value="${esc(r.Kind)}" onchange="if(!val('mu'))$('#mu').value=MEASURE_UNIT(this.value)">
+    <datalist id="mkl">${known.map(k => `<option>${esc(k)}</option>`).join('')}</datalist>
+    <div class="inline"><div style="flex:1"><label>Value</label><input id="mv" type="number" inputmode="decimal" step="any" value="${esc(r.Value)}"></div>
+      <div style="flex:1"><label>Second value (optional)</label><input id="mv2" type="number" inputmode="decimal" step="any" value="${esc(r.Value2)}" placeholder="e.g. lower BP"></div></div>
+    <div class="inline"><div style="flex:1"><label>Unit</label><input id="mu" value="${esc(r.Unit || unitOf(r.Kind))}"></div>
+      <div style="flex:1"><label>Date</label><input id="mdt" type="date" value="${esc(r.Date)}"></div></div>
+    <label>Note</label><input id="mnt" value="${esc(r.Note)}">
+    <div class="btns"><button class="btn" onclick="saveMeasure(${row || 0})">Save</button>
+      ${row ? `<button class="btn ghost" onclick="if(confirm('Delete this measurement?'))act('deleteRow',{tab:'Measures',row:${row}},'Deleted')">Delete</button>` : ''}</div>`);
+  window.MEASURE_UNIT = unitOf;
+}
+function saveMeasure(row) {
+  const v = { Kind: val('mk'), Value: val('mv') === '' ? '' : +val('mv'), Value2: val('mv2') === '' ? '' : +val('mv2'), Unit: val('mu'), Date: val('mdt') || todayISO(), Note: val('mnt') };
+  if (!v.Kind || v.Value === '') return toast('Say what you measured and the value');
+  SEG.mk = v.Kind;
+  row ? upd('Measures', row, v, 'Saved ✓') : add('Measures', v, 'Added ✓');
+}
+function hlogModal(row) {
+  const h = row ? D.healthlog.find(x => x._row === row) : { Type: 'visit', Date: todayISO() };
+  openModal(`<h3>${row ? 'Edit' : 'New visit or result'}</h3>
+    <label>Kind</label><select id="ht">${[['visit', '🩺 Doctor visit'], ['result', '🧪 Test result'], ['vaccine', '💉 Vaccine'], ['symptom', '🤒 Symptom']].map(o => `<option value="${o[0]}" ${o[0] === h.Type ? 'selected' : ''}>${o[1]}</option>`).join('')}</select>
+    <label>What</label><input id="hti" value="${esc(h.Title)}" placeholder="e.g. Yearly blood tests">
+    <div class="inline"><div style="flex:1"><label>Date</label><input id="hd" type="date" value="${esc(h.Date)}"></div>
+      <div style="flex:1"><label>Doctor / clinic</label><input id="hdo" value="${esc(h.Doctor)}"></div></div>
+    <label>Notes (what was said, values, next steps)</label><textarea id="hn" rows="4">${esc(h.Notes)}</textarea>
+    <div class="btns"><button class="btn" onclick="saveHlog(${row || 0})">Save</button>
+      ${row ? `<button class="btn ghost" onclick="if(confirm('Delete this entry?'))act('deleteRow',{tab:'HealthLog',row:${row}},'Deleted')">Delete</button>` : ''}</div>`);
+}
+function saveHlog(row) {
+  const v = { Type: val('ht'), Title: val('hti'), Date: val('hd') || todayISO(), Doctor: val('hdo'), Notes: val('hn') };
+  if (!v.Title) return toast('Say what it was');
+  row ? upd('HealthLog', row, v, 'Saved ✓') : add('HealthLog', v, 'Added ✓');
+}
+
+// What the app was opened for: a rating from the notification, or something shared from another app.
+let STARTED = false;
+function handleStart() {
+  if (STARTED || !D) return;
+  STARTED = true;
+  if (START.home && window.top !== window) window.top.postMessage({ selfmate: 'hello' }, '*');
+  if (START.open === 'mood') { SEG.me = 'mood'; go('me'); rateModal(todayISO()); }
+  else if (START.wish) sharedWish(START.wish);
+}
+
+const VIEWS = { home: viewHome, dates: viewDates, money: viewMoney, trips: viewTrips, projects: viewProjects, me: viewMe, srl: viewSrl };
 
 // ---------- Preview mode (only used when opened outside Google, e.g. on a computer for testing) ----------
 const MOCK = (() => {
@@ -2367,6 +2880,23 @@ const MOCK = (() => {
       { _row: 6, Date: off(-9), Project: 'Sourdough baking', Type: 'Session', Hours: 2, Count: 2, Cost: 20, Note: 'Open crumb at last!', Photo: 'm3', Thumb: 'm3' },
       { _row: 7, Date: off(-20), Project: 'Biking', Type: 'Session', Hours: 2, Km: 42, Note: 'Făget loop' },
       { _row: 8, Date: off(-3), Project: 'Biking', Type: 'Session', Hours: 1.5, Km: 30, Cost: 120, Note: 'New tyres' }],
+    wishlist: [
+      { _row: 2, Item: 'Rain jacket', Price: 349, Shop: 'Decathlon', Added: off(-3), WaitUntil: off(-1), Status: 'waiting', Link: 'https://example.com/jacket' },
+      { _row: 3, Item: 'Espresso machine', Price: 1299, Shop: 'eMAG', Added: off(-4), WaitUntil: off(10), Status: 'waiting' },
+      { _row: 4, Item: 'Wireless earbuds', Price: 420, Shop: 'Altex', Added: off(-30), WaitUntil: off(-28), Status: 'dropped', Decided: off(-27) },
+      { _row: 5, Item: 'Hiking boots', Price: 610, Shop: 'Decathlon', Added: off(-50), WaitUntil: off(-36), Status: 'bought', Decided: off(-35) }],
+    mood: Array.from({ length: 80 }, (_, i) => { const day = off(-i - 1), r = k => Math.abs(Math.sin((i + 3) * 7.13 + k)) ;
+      if (r(9) < 0.12) return null;
+      const sleep = Math.round(4 + r(1) * 6), ex = r(2) > 0.6, mood = Math.max(1, Math.min(5, Math.round(sleep * 0.35 + (ex ? 0.7 : 0) + r(3) * 1.8 - 0.6)));
+      return { _row: 200 + i, Date: day, Mood: mood, Energy: Math.max(1, Math.min(5, Math.round(mood - 0.5 + r(4)))), Sleep: sleep, Tags: [ex ? 'Exercise' : '', r(5) > 0.5 ? 'Work' : '', r(6) > 0.8 ? 'Friends' : ''].filter(Boolean).join(', '), Note: i === 0 ? 'Long walk after work' : '', Owner: 'owner' };
+    }).filter(Boolean),
+    medicines: [{ _row: 2, Name: 'Vitamin D', Dose: '2000 IU', When: 'morning', PerDay: 1, Stock: 20, StockDate: off(-12), Owner: 'owner' }],
+    measures: [72.4, 72.1, 71.8, 71.9, 71.3, 71.0, 70.8].map((v, i) => ({ _row: 300 + i, Date: off(-90 + i * 14), Kind: 'Weight', Value: v, Value2: '', Unit: 'kg', Owner: 'owner' }))
+      .concat([{ _row: 320, Date: off(-20), Kind: 'Blood pressure', Value: 128, Value2: 82, Unit: 'mmHg' }, { _row: 321, Date: off(-6), Kind: 'Blood pressure', Value: 122, Value2: 79, Unit: 'mmHg' }]),
+    healthlog: [{ _row: 2, Date: off(-40), Type: 'result', Title: 'Yearly blood tests', Doctor: 'Clinic', Notes: 'All normal, vitamin D a bit low' }],
+    lines: ['The rear-view mirror is small and the windscreen is big for a reason. Glance back, then look ahead.', 'An arrow only flies once you let it go.', 'Rest is part of the work, not a break from it.']
+      .map((l, i) => ({ _row: 2 + i, Line: l })),
+    push: { devices: 0, time: '21:00', on: true },
     invoices: [{ _row: 2, Number: 'MTD001', Date: t.slice(0, 4) + '-03-10', Client: 'Client A', Amount: 12000, PaidOn: t.slice(0, 4) + '-03-20' },
                { _row: 3, Number: 'MTD002', Date: t.slice(0, 4) + '-09-02', Client: 'Client B', Amount: 8000 }],
   };
@@ -2400,6 +2930,10 @@ const MOCK = (() => {
     if (action === 'renameCategory') { db.categories.forEach(c => { if (c.Category === d.from) c.Category = d.to; }); db.transactions.forEach(t => { if (t.Category === d.from) t.Category = d.to; }); }
     if (action === 'checkin') { const h = db.habit; if (!(h.last >= mondayISO())) h.n++; h.last = t; if (d.plan !== undefined) h.plan = d.plan; return Object.assign({}, h); }
     if (action === 'import') return { added: 0, skipped: 0, unsorted: 0 };
+    if (action === 'peek') return { url: d.url, title: 'Waterproof hiking jacket, men', price: 79.9, currency: 'EUR', shop: 'Example Shop', image: '' };
+    if (action === 'pushTest') return { sent: 0, devices: 0 };
+    if (action === 'rate') { const v = Object.assign({ Owner: 'owner' }, d.values), r = db.mood.find(x => x.Date === v.Date);
+      if (r) { Object.assign(r, v); return r._row; } v._row = row++; db.mood.push(v); return v._row; }
     if (action === 'tagTrip') db.transactions.forEach(x => { if ((d.add || []).includes(x._row)) x.Trip = d.trip; if ((d.remove || []).includes(x._row) && x.Trip === d.trip) x.Trip = ''; });
     return true;
   } };
