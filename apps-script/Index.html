@@ -265,11 +265,14 @@
 <nav id="tabs"></nav>
 <div id="modal" class="modal hidden" onclick="if(event.target===this)closeModal()"><div class="sheet" id="sheet"></div></div>
 <div id="toast"></div>
+<!-- filled in by the server: the link key and what the app was opened for (plain HTML attributes, escaped the standard way) -->
+<div id="boot" hidden data-k="<?= key ?>" data-start="<?= start ?>"></div>
 
 <script>
-const KEY = "<?= key ?>";
+const BOOT = document.getElementById('boot').dataset;
+const KEY = String(BOOT.k || '').replace(/[^0-9a-f]/gi, '') || 'preview';   // the key is hex only
 // What the server says the app was opened for (home-screen app, a shared link, the evening notification). Preview: nothing.
-const START = (() => { try { return JSON.parse(decodeURIComponent(escape(atob("<?= start ?>")))); } catch (e) { return {}; } })();
+const START = (() => { try { return JSON.parse(decodeURIComponent(escape(atob(BOOT.start)))); } catch (e) { return {}; } })();
 const AREA = { Car: '🚗', Home: '🏠', Taxes: '🧾', Health: '🩺', Documents: '🪪', Insurance: '🛡️', Digital: '🌐',
                People: '🎂', SRL: '🏢', Subscriptions: '📺', Other: '📌' };
 const TABS = [['home', '🌱', 'Today'], ['money', '💰', 'Money'], ['dates', '📅', 'Dates'], ['trips', '✈️', 'Trips'],
@@ -376,13 +379,21 @@ function call(action, data) {
     } else setTimeout(() => { try { res(MOCK.api(action, payload)); } catch (e) { rej(e); } }, 150);
   });
 }
+// Nothing to show yet and the Sheet can't be reached: say so, instead of watering the garden forever.
+function loadFailed(e) {
+  if (D || /LOCKED/.test(e && e.message)) return;
+  $('#view').innerHTML = `<div class="card" style="margin-top:40px"><h3>Couldn't reach your Sheet</h3>
+    <p class="muted small">${esc((e && e.message) || 'No answer from Google.')}</p>
+    <div class="btns"><button class="btn" onclick="$('#view').innerHTML='<div class=loading>Watering the garden…</div>';load()">Try again</button></div></div>`;
+}
 async function load() {
   if (!D && !SESSION) {   // with a remembered session, getData itself says LOCKED if it has run out
-    const st = await call('pinStatus');
+    const st = await call('pinStatus').catch(e => { loadFailed(e); return null; });
+    if (!st) return;
     if (!st.valid) return lockScreen(st);
   }
   if (!D && SESSION && (D = savedCopy())) { prepare(D); STALE = true; render(); }
-  const seq = SEQ, d = await call('getData').catch(() => null);
+  const seq = SEQ, d = await call('getData').catch(e => { loadFailed(e); return null; });
   if (!d || seq !== SEQ) return;   // locked, or a newer change happened meanwhile: its own reload will show it
   saveCopy(d);
   D = prepare(d); STALE = false;
