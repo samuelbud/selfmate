@@ -130,7 +130,7 @@ function permission() {
     box.querySelector('#no').onclick = () => { box.remove(); res('default'); };
   });
 }
-async function pushOn(link, frame, origin) {
+async function pushOn(frame, origin) {
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !window.Notification) throw new Error('This browser cannot show notifications. Use Chrome.');
   const perm = await permission();
   if (perm === 'denied') throw new Error('Notifications are blocked. Allow them in the phone settings (Apps → SelfMate → Notifications), then try again.');
@@ -142,8 +142,6 @@ async function pushOn(link, frame, origin) {
   if (sub && !same) { await sub.unsubscribe(); sub = null; }
   if (!sub) sub = await step("Signing up with the phone's notification service", reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(key) }));
   await step('Saving this phone in SelfMate', ask(frame, origin, 'sub', JSON.stringify({ endpoint: sub.endpoint })));
-  // The notification itself fetches tonight's line directly. If that is blocked it still comes, using the saved lines; say so.
-  return fetch(link + '&push=line').then(r => r.json()).then(() => '').catch(err => 'Notifications on 🔔 (direct connection failed: ' + (err.message || err) + '; the reminder still comes, using saved lines)');
 }
 async function pushOff(frame, origin) {
   const sub = await subscription();
@@ -160,7 +158,7 @@ window.addEventListener('message', async e => {
       if (window.caches && Array.isArray(e.data.lines)) caches.open('selfmate-link').then(c => c.put('lines', new Response(JSON.stringify({ lines: e.data.lines, offset: e.data.offset || 0 })))).catch(() => {});
       reply({ subscribed: await isOn() });
     }
-    if (e.data.selfmate === 'push-on') { const note = await pushOn(current, e.source, e.origin); reply({ subscribed: true, changed: true, note }); }
+    if (e.data.selfmate === 'push-on') { await pushOn(e.source, e.origin); reply({ subscribed: true, changed: true }); }
     if (e.data.selfmate === 'push-off') { await pushOff(e.source, e.origin); reply({ subscribed: false, changed: true }); }
   } catch (err) { reply({ subscribed: await isOn(), error: err.message || String(err) }); }
 });

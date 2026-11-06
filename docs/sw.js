@@ -39,7 +39,14 @@ self.addEventListener('push', e => e.waitUntil((async () => {
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   e.waitUntil((async () => {
-    if (e.action === 'later') { const link = await appLink(); if (link) await fetch(link + '&push=snooze').catch(() => null); return; }
+    if (e.action === 'later') {
+      // The answer isn't needed, only that the request gets there, so this mode works where a normal request is refused.
+      const link = await appLink();
+      const sent = link && await fetch(link + '&push=snooze', { mode: 'no-cors' }).then(() => true).catch(() => false);
+      if (!sent) return self.registration.showNotification('⏰ Could not set it for later', {
+        body: 'Open SelfMate and rate your day when you are ready.', icon: 'icon-192.png', badge: 'badge-96.png', tag: 'selfmate-evening' });
+      return;
+    }
     const url = new URL('./#mood', self.registration.scope).href;
     const wins = await clients.matchAll({ type: 'window', includeUncontrolled: true });
     const w = wins.find(x => x.url.startsWith(self.registration.scope));
