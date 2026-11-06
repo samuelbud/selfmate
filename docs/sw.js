@@ -16,10 +16,18 @@ self.addEventListener('fetch', e => {
 
 // ---------- evening notification ----------
 // The push from SelfMate is empty; the words come from your own SelfMate (tonight's line from your Lines tab).
+// Tonight's line from the saved list (the app refreshes it each time it opens), counted the same way as in the app.
+const savedLine = async () => {
+  const r = await (await caches.open('selfmate-link')).match('lines');
+  if (!r) return '';
+  const { lines, offset } = await r.json(), now = new Date();
+  return lines.length ? lines[(Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 864e5) + offset) % lines.length] : '';
+};
 const appLink = () => caches.open('selfmate-link').then(c => c.match('link')).then(r => (r ? r.text() : '')).catch(() => '');
 self.addEventListener('push', e => e.waitUntil((async () => {
   let n = null;
   try { const link = await appLink(); if (link) n = await (await fetch(link + '&push=line')).json(); } catch (err) { /* offline: plain words */ }
+  if (!n || !n.body) { const line = await savedLine().catch(() => ''); if (line) n = Object.assign({}, n, { body: line }); }
   const day = Math.floor(Date.now() / 864e5);
   return self.registration.showNotification((n && n.title) || '🌙 How was your day?', {
     body: (n && n.body) || 'Twenty seconds to rate your mood and energy.',

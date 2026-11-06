@@ -166,28 +166,39 @@ function notice_(role) {
 }
 
 // Called by the home-screen app (doGet ?push=…&k=<private link key>). Answers in JSON.
+// A script error comes back as a Google error page the home-screen app isn't allowed to read, which the phone only
+// reports as "Failed to fetch". So every error goes back as an answer the app can read and show.
+const pushOut_ = o => ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
 function pushApi_(p) {
-  const out = o => ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
-  const who = auth_(p.k);
-  if (!who) return out({ error: 'This link is not valid' });
-  if (p.push === 'key') return out({ key: vapidKeys_().pub });
-  if (p.push === 'line') return out(notice_(who.role));
+  try { return pushOut_(pushAnswer_(auth_(p.k), p)); } catch (e) { return pushOut_({ error: 'SelfMate could not do that: ' + (e.message || e) }); }
+}
+// After publishing: tools/check-live.js. Runs each step and says which one fails. Returns no personal data and no secrets.
+function pushCheck_() {
+  const steps = { keys: () => !!vapidKeys_().pub, sign: () => !!vapidJwt_('https://fcm.googleapis.com/check').jwt, triggers: () => ScriptApp.getProjectTriggers().length >= 0, lock: () => { const l = LockService.getScriptLock(); l.waitLock(20000); l.releaseLock(); return true; } };
+  const res = {};
+  Object.keys(steps).forEach(k => { const t = Date.now(); try { res[k] = { ok: steps[k](), ms: Date.now() - t }; } catch (e) { res[k] = { ok: false, ms: Date.now() - t, error: String(e.message || e).slice(0, 200) }; } });
+  return pushOut_(res);
+}
+function pushAnswer_(who, p) {
+  if (!who) return { error: 'This link is not valid' };
+  if (p.push === 'key') return { key: vapidKeys_().pub };
+  if (p.push === 'line') return notice_(who.role);
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
     if (p.push === 'sub' || p.push === 'unsub') {
       const sub = JSON.parse(p.sub || '{}');
-      if (!PUSH_HOSTS.test(String(sub.endpoint || ''))) return out({ error: 'Unknown push service' });
+      if (!PUSH_HOSTS.test(String(sub.endpoint || ''))) return { error: 'Unknown push service' };
       const list = subsOf_(who.role).filter(x => x.endpoint !== sub.endpoint);
       if (p.push === 'sub') { list.push({ endpoint: sub.endpoint, at: iso_(new Date()) }); ensurePushTrigger_(); }
       saveSubs_(who.role, list);
-      return out({ ok: true, devices: subsOf_(who.role).length });
+      return { ok: true, devices: subsOf_(who.role).length };
     }
-    if (p.push === 'snooze') { setProp_('PUSH_SNOOZE_' + who.role, String(Date.now() + 60 * 60000)); return out({ ok: true }); }
+    if (p.push === 'snooze') { setProp_('PUSH_SNOOZE_' + who.role, String(Date.now() + 60 * 60000)); return { ok: true }; }
   } finally {
     lock.releaseLock();
   }
-  return out({ error: 'Unknown request' });
+  return { error: 'Unknown request' };
 }
 
 // Starter lines for the evening notification. Short thoughts, not advice; replace them with your own any time.

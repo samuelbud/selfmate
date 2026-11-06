@@ -97,7 +97,21 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catc
 const reopenForMood = () => { if (current) { openMood = true; openApp(current); } };
 window.addEventListener('hashchange', () => { if (location.hash === '#mood') { history.replaceState(null, '', location.pathname); reopenForMood(); } });
 if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.selfmate === 'open-mood') reopenForMood(); });
-const ask = (link, what, extra) => fetch(link + '&push=' + what + (extra || '')).then(r => r.json());
+// Questions go through the open app (the frame), because that connection is known to work on this phone.
+let askId = 0;
+const ask = (frame, origin, what, sub) => new Promise((res, rej) => {
+  const id = ++askId;
+  const done = e => {
+    if (e.source !== frame || !e.data || e.data.selfmate !== 'push-answer' || e.data.id !== id) return;
+    window.removeEventListener('message', done); clearTimeout(t);
+    e.data.answer && e.data.answer.error ? rej(new Error(e.data.answer.error)) : res(e.data.answer || {});
+  };
+  const t = setTimeout(() => { window.removeEventListener('message', done); rej(new Error('SelfMate did not answer in time. Try again.')); }, 45000);
+  window.addEventListener('message', done);
+  frame.postMessage({ selfmate: 'push-ask', id, what, sub }, origin);
+});
+// Says which step failed, because the phone's own messages don't.
+const step = (name, p) => p.catch(err => { throw new Error(name + ': ' + (err.message || err)); });
 const b64 = s => { const t = atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)); return Uint8Array.from(t, c => c.charCodeAt(0)); };
 async function subscription() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
@@ -116,25 +130,25 @@ function permission() {
     box.querySelector('#no').onclick = () => { box.remove(); res('default'); };
   });
 }
-async function pushOn(link) {
+async function pushOn(link, frame, origin) {
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !window.Notification) throw new Error('This browser cannot show notifications. Use Chrome.');
   const perm = await permission();
   if (perm === 'denied') throw new Error('Notifications are blocked. Allow them in the phone settings (Apps → SelfMate → Notifications), then try again.');
   if (perm !== 'granted') throw new Error('Notifications were not allowed.');
-  const { key, error } = await ask(link, 'key');
-  if (error) throw new Error(error);
+  const { key } = await step('Asking SelfMate for its key', ask(frame, origin, 'key'));
   const reg = await navigator.serviceWorker.ready;
   let sub = await reg.pushManager.getSubscription();
   const same = sub && sub.options && sub.options.applicationServerKey && btoa(String.fromCharCode(...new Uint8Array(sub.options.applicationServerKey))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') === key;
   if (sub && !same) { await sub.unsubscribe(); sub = null; }
-  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(key) });
-  const r = await ask(link, 'sub', '&sub=' + encodeURIComponent(JSON.stringify({ endpoint: sub.endpoint })));
-  if (r.error) throw new Error(r.error);
+  if (!sub) sub = await step("Signing up with the phone's notification service", reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(key) }));
+  await step('Saving this phone in SelfMate', ask(frame, origin, 'sub', JSON.stringify({ endpoint: sub.endpoint })));
+  // The notification itself fetches tonight's line directly. If that is blocked it still comes, using the saved lines; say so.
+  return fetch(link + '&push=line').then(r => r.json()).then(() => '').catch(err => 'Notifications on 🔔 (direct connection failed: ' + (err.message || err) + '; the reminder still comes, using saved lines)');
 }
-async function pushOff(link) {
+async function pushOff(frame, origin) {
   const sub = await subscription();
   if (!sub) return;
-  await ask(link, 'unsub', '&sub=' + encodeURIComponent(JSON.stringify({ endpoint: sub.endpoint }))).catch(() => null);
+  await ask(frame, origin, 'unsub', JSON.stringify({ endpoint: sub.endpoint })).catch(() => null);
   await sub.unsubscribe();
 }
 const isOn = async () => !!(window.Notification && Notification.permission === 'granted' && await subscription().catch(() => null));
@@ -142,9 +156,12 @@ window.addEventListener('message', async e => {
   if (!/^https:\/\/[\w-]+\.googleusercontent\.com$/.test(e.origin) || !e.data || !current) return;   // only your SelfMate, inside this page
   const reply = m => e.source && e.source.postMessage(Object.assign({ selfmate: 'push-status' }, m), e.origin);
   try {
-    if (e.data.selfmate === 'hello') reply({ subscribed: await isOn() });
-    if (e.data.selfmate === 'push-on') { await pushOn(current); reply({ subscribed: true, changed: true }); }
-    if (e.data.selfmate === 'push-off') { await pushOff(current); reply({ subscribed: false, changed: true }); }
+    if (e.data.selfmate === 'hello') {
+      if (window.caches && Array.isArray(e.data.lines)) caches.open('selfmate-link').then(c => c.put('lines', new Response(JSON.stringify({ lines: e.data.lines, offset: e.data.offset || 0 })))).catch(() => {});
+      reply({ subscribed: await isOn() });
+    }
+    if (e.data.selfmate === 'push-on') { const note = await pushOn(current, e.source, e.origin); reply({ subscribed: true, changed: true, note }); }
+    if (e.data.selfmate === 'push-off') { await pushOff(e.source, e.origin); reply({ subscribed: false, changed: true }); }
   } catch (err) { reply({ subscribed: await isOn(), error: err.message || String(err) }); }
 });
 </script>

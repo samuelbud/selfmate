@@ -2675,15 +2675,21 @@ function pushBridge(what) {
   window.top.postMessage({ selfmate: what }, '*');
   toast(what === 'push-on' ? 'Asking your phone…' : 'Turning off…');
   clearTimeout(PUSHWAIT);
-  PUSHWAIT = setTimeout(() => toast('⚠️ No answer from the home-screen app. Reinstall it from the home page, then try again.'), 20000);
+  PUSHWAIT = setTimeout(() => toast('⚠️ No answer from the home-screen app. Reinstall it from the home page, then try again.'), 60000);
 }
 window.addEventListener('message', e => {
   const m = e.data || {};
+  // The home page turns notifications on through the open app, which reaches your SelfMate the same way everything else does.
+  if (m.selfmate === 'push-ask' && e.source === window.top && window.top !== window) {
+    const answer = o => e.source.postMessage(Object.assign({ selfmate: 'push-answer', id: m.id }, o), e.origin);
+    call('pushReg', { what: m.what, sub: m.sub }).then(r => answer({ answer: r })).catch(err => answer({ answer: { error: err.message || String(err) } }));
+    return;
+  }
   if (m.selfmate !== 'push-status') return;
   clearTimeout(PUSHWAIT);
   PUSHHERE = !!m.subscribed;
   if (m.error) toast('⚠️ ' + m.error);
-  else if (m.changed) { toast(PUSHHERE ? 'Notifications on 🔔' : 'Notifications off on this phone'); load().then(() => { if (!$('#modal').classList.contains('hidden')) moodSettingsModal(); }); }
+  else if (m.changed) { toast(m.note || (PUSHHERE ? 'Notifications on 🔔' : 'Notifications off on this phone')); load().then(() => { if (!$('#modal').classList.contains('hidden')) moodSettingsModal(); }); }
 });
 async function pushTest(btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
@@ -2805,7 +2811,8 @@ let STARTED = false;
 function handleStart() {
   if (STARTED || !D) return;
   STARTED = true;
-  if (START.home && window.top !== window) window.top.postMessage({ selfmate: 'hello' }, '*');
+  // The lines go along so that a notification still has tonight's line if the phone can't reach SelfMate at that moment.
+  if (START.home && window.top !== window) window.top.postMessage({ selfmate: 'hello', offset: D.role === 'owner' ? 0 : 7, lines: (D.lines || []).map(x => String(x.Line || '').trim().slice(0, 300)).filter(Boolean).slice(0, 100) }, '*');
   if (START.open === 'mood') { SEG.me = 'mood'; go('me'); rateModal(todayISO()); }
   else if (START.wish) sharedWish(START.wish);
 }
@@ -2944,6 +2951,7 @@ const MOCK = (() => {
     if (action === 'import') return { added: 0, skipped: 0, unsorted: 0 };
     if (action === 'peek') return { url: d.url, title: 'Waterproof hiking jacket, men', price: 79.9, currency: 'EUR', shop: 'Example Shop', image: '' };
     if (action === 'pushTest') return { sent: 0, devices: 0 };
+    if (action === 'pushReg') return d.what === 'key' ? { key: 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U' } : { ok: true, devices: 1 };
     if (action === 'rate') { const v = Object.assign({ Owner: 'owner' }, d.values), r = db.mood.find(x => x.Date === v.Date);
       if (r) { Object.assign(r, v); return r._row; } v._row = row++; db.mood.push(v); return v._row; }
     if (action === 'tagTrip') db.transactions.forEach(x => { if ((d.add || []).includes(x._row)) x.Trip = d.trip; if ((d.remove || []).includes(x._row) && x.Trip === d.trip) x.Trip = ''; });

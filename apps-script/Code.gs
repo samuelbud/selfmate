@@ -219,6 +219,7 @@ function doGet(e) {
   const props = PropertiesService.getScriptProperties();
   if (!props.getProperty('OWNER_KEY')) return firstRun_();
   if (p.check === 'page') return builtPage_();   // after publishing: tools/check-live.js tests that this page's code still runs
+  if (p.check === 'push') return pushCheck_();   // same: tests the notification code on Google (no key, no personal data)
   if (p.push) return pushApi_(p);   // the home-screen app's notification requests (Push.gs)
   // The owner opening the plain link (no key) gets their links shown again.
   if (!p.k && isOwnerVisiting_()) return linksPage_('🔑 Your SelfMate links');
@@ -610,6 +611,7 @@ function api(key, action, data) {
   if (action === 'photos') return photos_(who, data.ids || []);   // read-only: no lock needed
   if (action === 'peek') return peek_(data.url);                    // reads a shop page, changes nothing
   if (action === 'pushTest') return { sent: pushTo_(who.role), devices: subsOf_(who.role).length };
+  if (action === 'pushReg') return pushAnswer_(who, { push: ['key', 'sub', 'unsub'].includes(data.what) ? data.what : '', sub: data.sub });   // turning notifications on or off, asked through the open app
 
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);

@@ -16,4 +16,14 @@ fetch(link + '?check=page').then(r => r.text()).then(html => {
 }).catch(e => {
   console.error('✋ THE PUBLISHED APP WILL NOT START: ' + e.message + '\nPublish the previous version again, then look for "//" inside a text in Index.html.');
   process.exit(1);
+}).then(() => fetch(link + '?check=push', { headers: { Origin: 'https://samuelbud.github.io' } })).then(async r => {
+  // The notification code can only be tested on Google. A reply the home page can't read shows up on the phone as "Failed to fetch".
+  if (!r.headers.get('access-control-allow-origin')) throw new Error('the home-screen app would not be able to read this reply');
+  const res = await r.json(), bad = Object.keys(res).filter(k => !res[k].ok);
+  console.log('Notification steps: ' + JSON.stringify(res));
+  if (bad.length) throw new Error('step failed: ' + bad.join(', '));
+  console.log('✓ The notification code works on Google.');
+}).catch(e => {
+  console.error('✋ NOTIFICATIONS WILL NOT WORK: ' + e.message);
+  process.exit(1);
 });
