@@ -6,9 +6,10 @@ Everything you enter lives in **your own Google Sheet**. This repository contain
 **Home page:** https://samuelbud.github.io/selfmate/ (paste your private link once; it stays on your phone)
 
 ## What it does
-- **Today**: a plant that grows one leaf per weekly check-in, with the sky following the season and live local weather; what you can still spend this week; upcoming deadlines; one insight.
+- **Today**: a plant that grows one leaf per weekly check-in, with the sky following the season and live local weather; one next action; the next 3 deadlines.
 - **Money**: bank-statement import (BT, Revolut, most CSVs), automatic categories that learn from your answers, colour blocks per category, a year view, cash & savings balances, plain-language questions ("car this year"), and insights with concrete tips.
 - **Dates**: Romanian deadlines (RCA, ITP, rovinieta, impozite, Declarația unică…), synced to Google Calendar with reminders.
+- **Notes**: ideas, lists, shopping and to-dos, like Google Keep. Text notes and tick-off lists, colours, labels, pins, search, dates, archive and bin; share a note with your partner. Saves by itself and keeps what you wrote if there is no connection.
 - **Trips**, **Projects** and a **company** tab (deadlines, invoices, costs, plan vs actual).
 - Secret link + PIN lock, a partner link that hides private parts, and a Sunday summary email.
 

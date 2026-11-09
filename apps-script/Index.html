@@ -111,9 +111,6 @@
   .habit .btn { white-space: nowrap; flex: none; }
   .spend { font-family: "Young Serif", serif; font-size: 24px; line-height: 1.3; margin: 26px 0 0; }
   .spend b { font-weight: 400; font-size: 44px; display: block; letter-spacing: -1px; line-height: 1.05; }
-  .meter { height: 12px; border-radius: 12px; background: var(--line); margin: 12px 0 6px; overflow: hidden; }
-  .meter i { display: block; height: 100%; background: var(--leaf); border-radius: 12px; }
-  .meter.low i { background: var(--pollen); } .meter.out i { background: var(--berry); }
 
   /* Dates as tickets (borrowed from Bento) */
   .ticket { display: grid; grid-template-columns: 74px 1fr auto; align-items: stretch; background: var(--card); border: 1px solid var(--line);
@@ -185,7 +182,7 @@
 
   nav#tabs { position: fixed; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; gap: 2px;
     background: var(--ink); padding: 5px; border-radius: 28px; box-shadow: 0 8px 24px rgba(29,53,39,.25); z-index: 6; width: min(calc(100% - 16px), 470px); }
-  nav#tabs button { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; color: var(--bg); padding: 6px 2px 5px; border-radius: 22px;
+  nav#tabs button { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; color: var(--bg); padding: 6px 2px 5px; border-radius: 22px;
     font-size: min(10.5px, 2.85vw); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   nav#tabs button .i { font-size: 18px; line-height: 1.15; }
   nav#tabs button.on { background: var(--sprout); color: #1D3527; }
@@ -206,6 +203,7 @@
   .seg { display: flex; background: var(--line); border-radius: 16px; padding: 3px; margin: 10px 0; }
   .seg button { flex: 1; padding: 7px 0; border-radius: 13px; font-size: 13.5px; font-weight: 600; color: var(--muted); }
   .seg button.on { background: var(--card); color: var(--ink); }
+  .seg.tight button { font-size: 12.5px; }
   .back { color: var(--leaf); font-weight: 600; padding: 6px 0; }
   .loading { text-align: center; padding: 60px 0; color: var(--muted); font-family: "Young Serif", serif; font-size: 18px; }
   .askbar { display: block; width: 100%; text-align: left; margin-top: 16px; padding: 13px 16px; border-radius: 99px; background: var(--card); border: 1px solid var(--line); color: var(--muted); }
@@ -245,6 +243,58 @@
   .pixels i { display: block; aspect-ratio: 1; border-radius: 2px; background: var(--line); cursor: pointer; }
   .pixels i.x { background: transparent; cursor: default; } .pixels i.f { background: transparent; box-shadow: inset 0 0 0 1px var(--line); cursor: default; }
   .pixels .pm { font-size: 9.5px; color: var(--muted); line-height: 1; }
+  /* Recipes */
+  .recipe .acts { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; }
+  .recipe .acts a { margin-top: 0; }
+  .recipe.tried { opacity: .78; }
+  /* Notes */
+  :root { --nc-butter: #FBF0C4; --nc-leaf: #DCEBC9; --nc-sky: #D3E7EC; --nc-rose: #F8DCE4; --nc-lilac: #E4DEF5; --nc-sand: #EFE1D0; }
+  @media (prefers-color-scheme: dark) { :root { --nc-butter: #4A3F1C; --nc-leaf: #2C4A2E; --nc-sky: #24424C; --nc-rose: #4E2A38; --nc-lilac: #3A3560; --nc-sand: #4A3A2B; } }
+  .ngrid { columns: 2; column-gap: 8px; } @media (min-width: 560px) { .ngrid { columns: 3; } }
+  .ncard { background: var(--card); border: 1px solid var(--line); border-radius: 18px 5px 18px 5px; padding: 11px 12px; margin: 0 0 8px; break-inside: avoid; cursor: pointer; overflow-wrap: anywhere; }
+  .ncard b { display: block; font-weight: 600; margin-bottom: 3px; }
+  .ncard .ntxt { white-space: pre-wrap; font-size: 14px; line-height: 1.4; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 12; overflow: hidden; }
+  .ncard a { color: var(--leaf); font-weight: 600; }
+  .nc-butter { background: var(--nc-butter); } .nc-leaf { background: var(--nc-leaf); } .nc-sky { background: var(--nc-sky); }
+  .nc-rose { background: var(--nc-rose); } .nc-lilac { background: var(--nc-lilac); } .nc-sand { background: var(--nc-sand); }
+  .nmeta { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 7px; font-size: 12px; }
+  .ntag { background: rgba(120,140,120,.18); border-radius: 99px; padding: 1px 8px; color: inherit; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nline { display: flex; align-items: flex-start; gap: 10px; padding: 5px 0; font-size: 14px; line-height: 1.35; }
+  .ncheck { position: relative; width: 20px; height: 20px; flex: none; border: 2px solid var(--muted); border-radius: 7px 3px 7px 3px; margin-top: 1px; color: #fff; font-size: 12px; font-weight: 700; line-height: 1; padding: 0; }
+  .ncheck::before { content: ''; position: absolute; inset: -10px; }
+  .ncheck.on { background: var(--leaf); border-color: var(--leaf); }
+  @media (prefers-color-scheme: dark) { .ncheck.on { color: #14211A; } }
+  .nquick { display: flex; gap: 6px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 18px 5px 18px 5px; padding: 4px 6px 4px 4px; margin: 10px 0; }
+  .nquick input { border: 0; background: none; flex: 1; min-width: 0; }
+  .nquick button { font-size: 19px; padding: 6px 8px; flex: none; }
+  .nsearch { margin-top: 10px; }
+  .sheet.nsh { padding-bottom: 0; }
+  .nedit { display: flex; flex-direction: column; min-height: 62vh; }
+  .nedit input, .nedit textarea { background: none; border: 0; border-radius: 6px; padding: 4px 0; display: block; resize: none; overflow: hidden; }
+  .nedit input:focus, .nedit textarea:focus { outline: none; }
+  .nedit input.ntitle { font-family: "Young Serif", serif; font-size: 21px; flex: 1; min-width: 0; }
+  .nehead { display: flex; align-items: center; gap: 6px; }
+  .nehead button { font-size: 20px; padding: 4px 6px; flex: none; opacity: .45; } .nehead button.on { opacity: 1; }
+  .nitem { display: flex; align-items: flex-start; gap: 8px; min-height: 42px; }
+  .nitem textarea { flex: 1; min-width: 0; padding: 9px 0; }
+  .nitem .ncheck { margin-top: 11px; flex: none; }
+  .nitem.on textarea { text-decoration: line-through; opacity: .6; }
+  .nitem.drag { opacity: .55; }
+  .ngrip { touch-action: none; cursor: grab; color: var(--muted); padding: 9px 10px 9px 6px; margin-left: -6px; flex: none; user-select: none; -webkit-user-select: none; line-height: 1.5; }
+  .nx { color: var(--muted); flex: none; width: 46px; min-height: 42px; margin-right: -10px; display: flex; align-items: center; justify-content: center; }
+  .nticked { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0 0; padding-top: 2px; border-top: 1px solid rgba(120,140,120,.35); font-size: 13px; color: var(--muted); }
+  .nticked button { font-size: 13px; font-weight: 600; color: var(--leaf); padding: 11px 8px; }
+  .netools { position: sticky; bottom: 0; display: flex; align-items: center; gap: 2px; padding: 8px 0 12px; margin-top: auto; background: inherit; border-top: 1px solid rgba(120,140,120,.3); }
+  .sheet.nsh { background: var(--bg); } .sheet.nsh.nc-butter { background: var(--nc-butter); } .sheet.nsh.nc-leaf { background: var(--nc-leaf); } .sheet.nsh.nc-sky { background: var(--nc-sky); }
+  .sheet.nsh.nc-rose { background: var(--nc-rose); } .sheet.nsh.nc-lilac { background: var(--nc-lilac); } .sheet.nsh.nc-sand { background: var(--nc-sand); }
+  .netools > button:not(.btn) { font-size: 19px; min-width: 42px; padding: 7px 8px; border-radius: 12px; flex: none; } .netools > button.on:not(.btn) { background: rgba(120,140,120,.25); }
+  .netools .btn { margin-left: auto; padding: 8px 18px; }
+  .ncard .p-good { position: relative; } .ncard .p-good::before { content: ''; position: absolute; inset: -10px -4px; }
+  .nswatch { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--line); background: var(--card); font-size: 14px; }
+  .nswatch.on { border-color: var(--ink); }
+  .npanel { padding: 8px 0 2px; } .npanel .chip { background: rgba(255,255,255,.35); } .npanel .chip.on { background: var(--ink); }
+  .npanel input { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 9px 11px; margin: 6px 0; }
+  .npanel label { margin: 0; color: inherit; } .npanel .acts { display: grid; gap: 6px; } .npanel .acts button { text-align: left; padding: 9px 10px; border-radius: 12px; background: rgba(120,140,120,.16); font-weight: 600; font-size: 14px; }
   /* Wishlist */
   .wish .wtop { display: flex; gap: 12px; cursor: pointer; } .wish.ready { border: 2px solid var(--pollen); }
   .wpic { width: 64px; height: 64px; flex: none; border-radius: 14px 4px 14px 4px; object-fit: contain; background: #fff; display: grid; place-items: center; font-size: 30px; }
@@ -275,7 +325,7 @@ const KEY = String(BOOT.k || '').replace(/[^0-9a-f]/gi, '') || 'preview';   // t
 const START = (() => { try { return JSON.parse(decodeURIComponent(escape(atob(BOOT.start)))); } catch (e) { return {}; } })();
 const AREA = { Car: '🚗', Home: '🏠', Taxes: '🧾', Health: '🩺', Documents: '🪪', Insurance: '🛡️', Digital: '🌐',
                People: '🎂', SRL: '🏢', Subscriptions: '📺', Other: '📌' };
-const TABS = [['home', '🌱', 'Today'], ['money', '💰', 'Money'], ['dates', '📅', 'Dates'], ['trips', '✈️', 'Trips'],
+const TABS = [['home', '🌱', 'Today'], ['money', '💰', 'Money'], ['dates', '📅', 'Dates'], ['notes', '📝', 'Notes'], ['trips', '✈️', 'Trips'],
               ['projects', '🎨', 'Hobbies'], ['me', '🌿', 'Me'], ['srl', '🏢', 'SRL', true]];
 const GROUP_COLORS = ['var(--leaf)', 'var(--pollen)', '#6FA3B5', 'var(--berry)', '#8C7AC9', 'var(--soil)', 'var(--muted)'];
 const BLOCKS = ['var(--b1)', 'var(--b2)', 'var(--b3)', 'var(--b4)', 'var(--b5)', 'var(--b6)', 'var(--b7)'];
@@ -298,8 +348,8 @@ function rateOf(cur) {
   cur = String(cur || 'RON').toUpperCase();
   if (cur === 'RON') return 1;
   if (cur === 'EUR') return eur();
-  const m = String(D.settings.OtherRates || '').toUpperCase().match(new RegExp('\b' + cur + '\s*[=:]?\s*([\d.,]+)'));
-  return m ? +m[1].replace(',', '.') || 0 : 0;
+  const m = String(D.settings.OtherRates || '').toUpperCase().match(new RegExp('(^|[^A-Z])' + cur + '[ =:]*([0-9]+([.,][0-9]+)?)'));
+  return m ? +m[2].replace(',', '.') || 0 : 0;
 }
 // Payments in another currency count in lei everywhere (totals, insights, trips). The original stays in _orig
 // for display and for telling the server which row this is. Without a rate they stay out of the totals.
@@ -400,6 +450,7 @@ async function load() {
   D = prepare(d); STALE = false;
   render();
   if (!WX) loadWeather();
+  noteFlush();
 }
 function lockScreen(st) {
   D = null; closeModal();
@@ -487,19 +538,24 @@ let modalOpen = false, skipNextBack = false;
 function pushStep(state) { if (HIST) HIST.push(state); else history.pushState(state, ''); }
 function onBack(state) {
   if (skipNextBack) { skipNextBack = false; return; }
-  if (modalOpen) { modalOpen = false; $('#modal').classList.add('hidden'); return; }   // back closes an open panel first
+  if (modalOpen) { modalOpen = false; $('#modal').classList.add('hidden'); modalLeave(); return; }   // back closes an open panel first
   state = state || {};
   TAB = state.tab || 'home'; SUB = state.sub || null;
   if (D) { render(); window.scrollTo(0, 0); }
 }
 if (HIST) HIST.setChangeHandler(e => onBack(e.state)); else window.addEventListener('popstate', e => onBack(e.state));
 
+let MODAL_LEAVE = null;   // what a panel does when you leave it, whichever way (a note saves itself)
+function modalLeave() { const l = MODAL_LEAVE; MODAL_LEAVE = null; if (l) l(); }
 function openModal(html) {
+  modalLeave();
+  $('#sheet').className = 'sheet';
   $('#sheet').innerHTML = html; $('#modal').classList.remove('hidden'); loadPhotos();
   if (!modalOpen) { modalOpen = true; pushStep({ tab: TAB, sub: SUB, panel: 1 }); }
 }
 function closeModal() {
   $('#modal').classList.add('hidden');
+  modalLeave();
   if (modalOpen) { modalOpen = false; skipNextBack = true; history.back(); }   // remove the panel's step
 }
 function go(tab, sub) { TAB = tab; SUB = sub || null; render(); window.scrollTo(0, 0); pushStep({ tab: TAB, sub: SUB }); }
@@ -535,7 +591,9 @@ function render() {
   $('#banner').innerHTML = D.role === 'partner' && D.canPrivate
     ? `<div class="banner">🔓 Private views shared until ${new Date(D.privateUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>` : '';
   if (STALE) $('#banner').innerHTML += '<div class="updating">Updating…</div>';
+  const typing = document.activeElement && ['nq', 'ns'].includes(document.activeElement.id) ? document.activeElement : null, at = typing ? [typing.id, typing.selectionStart] : null;   // a reload must not take the keyboard away
   $('#view').innerHTML = VIEWS[TAB]();
+  if (at) { const e = document.getElementById(at[0]); if (e) { e.focus(); e.setSelectionRange(at[1], at[1]); } }
   loadPhotos();
   if (!STARTED) setTimeout(handleStart);
 }
@@ -544,17 +602,36 @@ function render() {
 function yearlyPot() { // monthly amount to put aside for everything that isn't paid monthly
   return sum(D.dates.filter(d => d.Private !== 'yes' && +d.RepeatMonths >= 2 && +d.Cost > 0), d => d.Cost / d.RepeatMonths);
 }
-function safeToSpend() {
+// A fixed bill counts at its monthly guide; without one, at what it really cost on average over the last 3 full months.
+function fixedBills() {
+  const ms = lastMonths(3);
+  return sum(D.categories.filter(c => c.Type === 'fixed'), c => +c.MonthlyTarget > 0 ? +c.MonthlyTarget
+    : -sum(D.transactions.filter(t => t.Category === c.Category && ron(t) && isMine(t) && +t.Amount < 0 && !t.Trip && ms.includes(String(t.Date).slice(0, 7))), t => t.Amount) / 3);
+}
+// This calendar month's everyday plan: known payments, plus the evening estimates for days the bank data doesn't reach yet.
+// When an import reaches a day, its real payments replace that day's estimate. The income in ⚙️ is the owner's.
+function monthPlan() {
   const s = D.settings, income = +s.MonthlyIncome || 0;
-  if (!income) return { ready: false };
-  const fixed = sum(D.categories.filter(c => c.Type === 'fixed'), c => c.MonthlyTarget);
-  const flexMonth = income - fixed - (+s.MonthlySavings || 0) - yearlyPot();
-  const weekly = flexMonth * 7 / 30.4;
-  const now = new Date(todayISO() + 'T00:00:00'); now.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-  const monday = new Date(now.getTime() - now.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+  if (!income || D.role !== 'owner') return { ready: false };
+  const bills = fixedBills(), savings = +s.MonthlySavings || 0, pot = yearlyPot();
+  const budget = income - bills - savings - pot;
+  const today = todayISO(), month = today.slice(0, 7), first = month + '-01';
   // Up card groceries are paid with meal vouchers, not with money from the salary; trip payments come out of the trip's budget
-  const spent = -sum(D.transactions.filter(t => ron(t) && t.Date >= monday && +t.Amount < 0 && catOf(t.Category).Type === 'flex' && t.Account !== 'Up card' && !t.Trip), t => t.Amount);
-  return { ready: true, weekly, spent, left: weekly - spent, pct: weekly > 0 ? (weekly - spent) / weekly : 0, fixed, flexMonth };
+  const mine = D.transactions.filter(t => ron(t) && isMine(t) && String(t.Date).startsWith(month) && +t.Amount < 0 && catOf(t.Category).Type === 'flex' && t.Account !== 'Up card' && !t.Trip);
+  const known = -sum(mine, t => t.Amount);
+  const accounts = dataUpTo().list.filter(x => x[0] !== 'Up card'), upTo = accounts.length ? accounts[accounts.length - 1][1] : '';   // the list is sorted, newest last
+  const open = (D.mood || []).filter(m => m.Date >= first && m.Date > upTo && m.SpentEstimate !== '' && m.SpentEstimate != null);
+  // an estimate is the whole day, so anything already quick-added that day is part of it
+  const estimated = sum(open, m => Math.max(0, +m.SpentEstimate + sum(mine.filter(t => t.Date === m.Date), t => t.Amount)));
+  const lastDay = new Date(+month.slice(0, 4), +month.slice(5, 7), 0).getDate(), today_ = +today.slice(8, 10), daysLeft = lastDay - today_ + 1;
+  let missing = 0;   // days before today that neither the bank data nor an estimate covers
+  for (let d = 1; d < today_; d++) { const iso = month + '-' + String(d).padStart(2, '0'); if (iso > upTo && !open.some(m => m.Date === iso)) missing++; }
+  // the plan is compared only up to the last day we know something about, so missing days can't look like saving
+  const lastKnown = [upTo.startsWith(month) ? upTo : ''].concat(open.map(m => m.Date)).filter(Boolean).sort().pop() || '';
+  const knownDay = lastKnown ? +lastKnown.slice(8, 10) : 0;
+  const spent = known + estimated, allowed = Math.max(0, budget) * knownDay / lastDay;
+  return { ready: true, income, bills, savings, pot, budget, spent, known, estimated, nEstimates: open.length, daysLeft, lastDay, missing, upTo, accounts,
+           lastKnown, allowed, over: spent - allowed, unsure: today_ - knownDay > 3 };
 }
 const spendTx = t => ron(t) && +t.Amount < 0 && ['flex', 'fixed', 'pot'].includes(catOf(t.Category).Type);
 const monthKey = back => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - (back || 0)); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); };
@@ -713,7 +790,11 @@ const ciSteps = () => [
   { key: 'balances', title: '🧮 Cash and savings', done: () => !staleBalances().length },
   { key: 'plan', title: '🌱 One plan for the week', done: () => !!(val('ciw') && val('cii')) },
 ];
-function startCheckin() { CI = { step: 0, imported: false }; checkinModal(); }
+// An import counts for the whole week on this phone, even if the check-in is closed and started again.
+const IMPORT_WEEK = 'selfmate_import_week';
+function markImported() { try { localStorage.setItem(IMPORT_WEEK, mondayISO()); } catch (e) { /* storage blocked: import again if asked */ } }
+function importedThisWeek() { try { return localStorage.getItem(IMPORT_WEEK) === mondayISO(); } catch (e) { return false; } }
+function startCheckin() { CI = { step: 0, imported: importedThisWeek() }; checkinModal(); }
 // A save from inside the check-in closes it: show it again now, and once more when the Sheet's data is back.
 function ciAgain(saving) { if (CI) setTimeout(checkinModal, 0); Promise.resolve(saving).then(() => { if (CI && !$('#modal').classList.contains('hidden')) checkinModal(); }); }
 function checkinModal() {
@@ -722,7 +803,7 @@ function checkinModal() {
   let body = '';
   if (st.key === 'import') {
     const f = dataUpTo();
-    body = `<p class="muted">Export the last days from your bank apps as CSV and import them here.</p>
+    body = `<p class="muted">Download the last days from your bank apps (CSV, or PDF from Banca Transilvania) and import them here.</p>
       ${f.list.length ? `<div class="card small">${f.list.map(x => `<div>${esc(x[0])}: up to <b>${short(x[1])}</b></div>`).join('')}</div>` : '<p class="muted small">No bank data of yours yet.</p>'}
       ${CI.imported ? '<p>✓ Imported.</p>' : ''}
       <button class="btn ghost wide" onclick="importModal()">⬆ Import a statement</button>`;
@@ -783,27 +864,38 @@ async function finishCheckin() {
   if (STALE) load();
 }
 
-// The weekly number is only as good as the last import: say how far the bank data goes.
-function freshness() {
-  const f = dataUpTo();
-  if (!f.oldest) return '';
+// Money's first card: whether this month is on pace. Deliberately never a "you have this much left" figure.
+function planCard() {
+  if (D.role !== 'owner') return '';
+  const s = monthPlan();
+  if (!s.ready) return `<button class="alert soft" onclick="openSettings()">Add your monthly income in ⚙️ to see your monthly plan</button>`;
   const short = iso => new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-  const each = f.list.map(x => `${esc(x[0])} ${short(x[1])}`).join(', ');
-  const behind = -days(f.oldest);
+  const over = s.over > Math.max(50, s.budget * .02);
+  const head = s.unsure ? 'Not sure yet' : over ? `${lei(s.over)} over pace` : 'On track';
+  const line = (a, b) => `<div style="display:flex;justify-content:space-between;gap:8px"><span>${a}</span><b>${b}</b></div>`;
+  return `<div class="card" style="margin-top:12px"><div class="label">This month's plan</div>
+    <div class="big" style="${over && !s.unsure ? 'color:var(--bad)' : ''}">${head}</div>
+    <div class="muted small" style="margin-top:6px">Spent ${lei(s.spent)} of about ${lei(s.budget)}.${s.lastKnown ? ` Up to ${short(s.lastKnown)} the plan allowed ${lei(s.allowed)}.` : ''}</div>
+    ${freshness(s)}
+    <details class="small" style="margin-top:6px"><summary class="muted">How the plan is worked out</summary><div style="margin-top:6px">
+      ${line('Income', lei(s.income))}${line('Monthly bills', '− ' + lei(s.bills))}${line('Automatic savings', '− ' + lei(s.savings))}${line('Yearly bills', '− ' + lei(s.pot))}
+      ${line('Everyday plan', lei(s.budget))}<p class="muted" style="margin:6px 0 0">A bill uses its monthly guide. Without one, it uses its average over the last 3 full months.</p></div></details></div>`;
+}
+// The number is only as good as what it knows: say how far the bank data goes and what is estimated.
+function freshness(s) {
+  const short = iso => new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const each = s.accounts.map(x => (s.accounts.length > 1 ? esc(x[0]) + ' ' : '') + short(x[1])).join(', ');
+  const behind = s.upTo ? -days(s.upTo) : 0;
   const nForeign = D.transactions.filter(t => !ron(t)).length;
-  return (behind > 7
-    ? `<button class="alert soft" onclick="go('money');importModal()">📥 Bank data only goes up to ${short(f.oldest)} (${behind} days ago), so this week's number is missing payments. Tap to import a statement.</button>`
-    : `<div class="muted small">Bank data up to: ${each}.</div>`)
+  const est = s.nEstimates ? `, plus ${s.nEstimates} evening estimate${s.nEstimates > 1 ? 's' : ''} (${lei(s.estimated)})` : '';
+  const gap = s.missing ? ` ${s.missing} earlier day${s.missing > 1 ? 's have' : ' has'} no estimate yet.` : '';
+  return `<div class="muted small">${s.upTo ? `Based on bank payments up to ${each}${est}.` : `No bank payments yet${est}.`}${gap}</div>`
+    + (behind > 7 ? `<button class="alert soft" onclick="go('money');importModal()">📥 Your bank data is ${behind} days old. Tap to import a statement.</button>` : '')
     + (nForeign ? `<div class="muted small">${nForeign} payment${nForeign > 1 ? 's' : ''} in another currency ${nForeign > 1 ? 'are' : 'is'} not counted yet: add the rate in ⚙️ Customise.</div>` : '');
 }
 function viewHome() {
-  const s = safeToSpend();
-  const upcoming = D.dates.filter(d => d.Due && !isDone(d) && days(d.Due) <= 45).sort((a, b) => a.Due < b.Due ? -1 : 1);
-  const need = D.dates.filter(d => !d.Due).length;
-  const uns = D.transactions.filter(t => t.Category === 'Unsorted').length;
-  const trips = D.trips.filter(t => t.Start && days(t.Start) >= 0).sort((a, b) => a.Start < b.Start ? -1 : 1);
+  const upcoming = D.dates.filter(d => d.Due && !isDone(d)).sort((a, b) => a.Due < b.Due ? -1 : 1);
   const n = D.habit.n, watered = checkedThisWeek();
-  const fill = s.ready ? Math.max(0, Math.min(100, s.pct * 100)) : 0;
   return `
     <div class="label">${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
     <h1>${greet()}${D.me ? ', ' + esc(D.me) : ''}</h1>
@@ -811,23 +903,32 @@ function viewHome() {
     <div class="habit"><p>${n === 0 ? 'Your plant starts as a seed.' : `${n} ${n === 1 ? 'leaf' : 'leaves'} so far.`}<br>One leaf per weekly check-in.<br>Skip a week, never two.</p>
       <button class="btn" ${watered ? 'style="opacity:.75"' : ''} onclick="startCheckin()">${watered ? 'Watered this week ✓' : 'Start my check-in'}</button></div>
     ${D.habit.plan ? `<p class="muted small">🌱 This week: ${esc(D.habit.plan)}.</p>` : ''}
-    ${s.ready ? (s.left >= 0
-        ? `<p class="spend">This week you can still spend <b>${lei(s.left)}</b></p>`
-        : `<p class="spend">This week you are over by <b>${lei(-s.left)}</b></p>`) +
-        `<div class="meter ${s.pct < .1 ? 'out' : s.pct < .4 ? 'low' : ''}"><i style="width:${fill}%"></i></div>
-         <div class="muted small">${lei(s.spent)} spent of about ${lei(s.weekly)}. Resets on Monday.</div>` + freshness()
-      : `<button class="alert soft" onclick="openSettings()">Add your monthly income in ⚙️ to see what you can spend each week</button>`}
-    ${uns ? `<button class="alert" onclick="go('money')">❓ ${uns} transaction${uns > 1 ? 's need' : ' needs'} a category. Tap to sort them.</button>` : ''}
+    ${nextAction()}
+    ${billsLine()}
     <h2>Coming up</h2>
-    ${upcoming.length ? upcoming.slice(0, 5).map(dateRow).join('') : '<p class="muted">Nothing due in the next 6 weeks.</p>'}
-    ${need ? `<button class="alert soft" onclick="go('dates','need')">${need} thing${need > 1 ? 's' : ''} still need${need > 1 ? '' : 's'} a date. Plant a few today.</button>` : ''}
-    <h2>${monthName(monthKey(0), { month: 'long' })} so far</h2>
-    ${catBlocks(monthKey(0), 6)}
-    <button class="btn ghost wide" style="margin-top:10px" onclick="SEG.money='cat';SEG.month=monthKey(0);go('money')">See all money</button>
-    ${trips.length ? `<h2>Next trip</h2>${tripCard(trips[0])}` : ''}
-    <h2>Growing savings</h2>
-    ${D.goals.map(goalRow).join('') || '<p class="muted">Add goals in the Goals tab of the Sheet.</p>'}
-    ${(() => { const top = insights()[0]; return top ? `<h2>💡 Worth knowing</h2>${insightCard(top)}<button class="back" onclick="insightsModal()">See all insights</button>` : ''; })()}`;
+    ${upcoming.slice(0, 3).map(dateRow).join('') || '<p class="muted">Nothing coming up.</p>'}
+    ${upcoming.length > 3 ? `<button class="back" onclick="go('dates')">All ${upcoming.length} dates ›</button>` : ''}`;
+}
+// The one most useful thing to do now; the rest wait until this one is done.
+function nextAction() {
+  const newest = D.role === 'owner' ? dataUpTo().list.filter(x => x[0] !== 'Up card').map(x => x[1]).sort().pop() : '';
+  const behind = newest ? -days(newest) : 0;
+  if (behind > 7) return `<button class="alert soft" onclick="go('money');importModal()">📥 Your bank data is ${behind} days old. Tap to import a statement.</button>`;
+  const uns = D.transactions.filter(t => t.Category === 'Unsorted').length;
+  if (uns) return `<button class="alert" onclick="go('money')">❓ ${uns} payment${uns > 1 ? 's need' : ' needs'} a category. Tap to sort.</button>`;
+  const ready = wishes().filter(isReady).length;
+  if (ready) return `<button class="alert soft" onclick="SEG.me='wish';go('me')">🛍️ ${ready} wish${ready > 1 ? 'es are' : ' is'} ready to decide.</button>`;
+  const dueNotes = notes().filter(n => !n.Status && n.Due && days(n.Due) <= 0).length;
+  if (dueNotes) return `<button class="alert soft" onclick="SEG.nv='due';go('notes')">📝 ${dueNotes} note${dueNotes > 1 ? 's are' : ' is'} due. Tap to see.</button>`;
+  const need = D.dates.filter(d => !d.Due).length;
+  if (need) return `<button class="alert soft" onclick="go('dates','need')">📝 ${need} thing${need > 1 ? 's' : ''} still need${need > 1 ? '' : 's'} a date.</button>`;
+  return '';
+}
+// The only insight on Today: bills soon that are big enough to plan for (5% of income, or 300 lei without an income set).
+function billsLine() {
+  const soon = D.dates.filter(d => d.Due && !isDone(d) && days(d.Due) >= 0 && days(d.Due) <= 30 && +d.Cost > 0), total = sum(soon, d => d.Cost);
+  if (!soon.length || total < (+D.settings.MonthlyIncome * .05 || 300)) return '';
+  return `<div class="muted small" style="margin-top:10px;cursor:pointer" onclick="insightsModal()">💡 ${lei(total)} of bills in the next 30 days ›</div>`;
 }
 
 // Categories as colour blocks, sized by how much went into each.
@@ -927,7 +1028,6 @@ function saveDate(row) {
 
 // ---------- MONEY ----------
 function viewMoney() {
-  if (SUB === 'wish') return viewWish();
   const uns = D.transactions.filter(t => t.Category === 'Unsorted');
   const month = SEG.month || monthKey(0), year = month.slice(0, 4);
   const thisMonth = D.transactions.filter(t => spendTx(t) && String(t.Date).startsWith(month));
@@ -945,10 +1045,7 @@ function viewMoney() {
     <div class="label">${monthName(month, { month: 'long', year: 'numeric' })}</div>
     <h1>${lei(total)} spent</h1>
     ${prevTotal ? `<p class="muted" style="margin:4px 0 0">That is ${lei(Math.abs(diff))} ${diff <= 0 ? 'less' : 'more'} than ${monthName(prevMonth(month), { month: 'long' })}.</p>` : ''}
-    <button class="askbar" onclick="askModal()">🔍 Ask about your money, e.g. "car this year"</button>
-    <button class="alert soft" onclick="insightsModal()">💡 ${insights().length} insights from your last 12 months</button>
-    <div class="btns"><button class="btn" onclick="quickAdd()">+ Quick add</button><button class="btn ghost" onclick="importModal()">⬆ Import statement</button></div>
-    ${wishSummary()}
+    ${month === monthKey(0) ? planCard() : ''}
     ${uns.length ? `<h2>❓ Help me sort (${uns.length})</h2>${uns.slice(0, 5).map(unsortedCard).join('')}
       ${uns.length > 5 ? `<p class="muted small">${uns.length - 5} more after these. Each answer teaches SelfMate a rule.</p>` : ''}` : ''}
     <h2>Where it went</h2>
@@ -956,6 +1053,8 @@ function viewMoney() {
     <div>${(SEG.money || 'cat') === 'cat' ? catBlocks(month) + '<p class="muted small">Bigger block, more money. Tap one for its history, transactions and a monthly guide amount.</p>'
       : gs.length ? '<div class="card">' + gs.map((g, i) => `<div class="barrow"><div class="top"><span>${esc(g[0])}</span><b>${lei(g[1])}</b></div>
       ${bar(g[1] / max * 100, GROUP_COLORS[i % GROUP_COLORS.length])}</div>`).join('') + '</div>' : '<p class="muted">No spending yet this month.</p>'}</div>
+    <div class="btns" style="margin-top:14px"><button class="btn" onclick="quickAdd()">+ Quick add</button><button class="btn ghost" onclick="importModal()">⬆ Import statement</button></div>
+    <button class="askbar" style="margin-top:8px" onclick="askModal()">🔍 Ask about your money, e.g. "car this year"</button>
     <h2>Your ${year}, month by month</h2>
     <div class="chips">${years.map(y => `<button class="chip ${y === year ? 'on' : ''}" onclick="SEG.month='${y === monthKey(0).slice(0, 4) ? monthKey(0) : y + '-12'}';render()">${y}</button>`).join('')}</div>
     <div class="card"><div class="cols">${months.map((m, i) => `<div onclick="SEG.month='${m}';render()" style="cursor:pointer">
@@ -963,9 +1062,13 @@ function viewMoney() {
       <div class="muted small" style="margin-top:6px">${year} total: <b>${lei(sum(mt, x => x))}</b>, without savings and transfers. Tap a month to see it.</div></div>
     <h2>Your money right now</h2>
     ${balancesCard() || '<button class="btn ghost wide" onclick="balanceModal(0)">+ Add cash or savings</button>'}
+    <h2>Growing savings</h2>
+    ${D.goals.map(goalRow).join('')}<button class="btn ghost wide" onclick="goalModal(0)">+ Add a goal</button>
     <h2>Yearly bills pot</h2>
     <div class="card"><b>${lei(yearlyPot())} / month</b><div class="muted small">Put this aside automatically on payday (e.g. a Revolut Vault),
       and RCA, ITP, impozite etc. stop being surprises. Calculated from the costs on your Dates.</div></div>
+    <div class="row" style="margin-top:18px" onclick="insightsModal()"><span class="emo">💡</span><div class="grow"><b>Insights</b>
+      <div class="muted small">Patterns from your last 12 months</div></div><span class="muted">›</span></div>
     <h2>Recent</h2>
     ${recent.map(txRow).join('') || '<p class="muted">No transactions yet.</p>'}`;
 }
@@ -1022,16 +1125,17 @@ function saveQuick() {
   if (!a) return toast('Type an amount');
   if (!window._qc) return toast('Pick a category');
   add('Transactions', { Date: val('qd'), Amount: -Math.abs(a), Currency: 'RON', Merchant: val('qn') || window._qc, Category: window._qc,
-    Account: 'Cash', Source: 'manual', Hash: 'm' + Date.now() }, 'Added ✓');
+    Account: 'Cash', Source: 'manual', Hash: 'm' + Date.now(), Person: myPerson() }, 'Added ✓');
 }
 function importModal() {
   openModal(`<h3>Import a bank statement</h3>
-    <p class="muted small"><b>BT Pay:</b> account → statement/transactions → export as <b>CSV</b>.<br>
+    <p class="muted small"><b>Banca Transilvania:</b> download the statement as <b>PDF</b>. It is read on your phone.<br>
     <b>Revolut:</b> account → ⋯ → Statement → Excel/CSV → choose period.<br>
     Only date, amount and merchant are kept. Card numbers and IBANs are removed. Duplicates are skipped, so overlapping periods are fine.</p>
     <label>Account</label><select id="ia"><option>Banca Transilvania</option><option>Revolut</option><option>Other</option></select>
     <label>Whose account?</label><select id="ip"><option value="S" ${myPerson() === 'S' ? 'selected' : ''}>${D.role === 'owner' ? 'Mine' : 'The owner&#39;s'}</option><option value="G" ${myPerson() === 'G' ? 'selected' : ''}>${D.role === 'owner' ? 'My partner&#39;s' : 'Mine'}</option></select>
-    <label>CSV file</label><input id="if" type="file" accept=".csv,text/csv,text/plain">
+    <label>Statement file (CSV, or PDF from Banca Transilvania)</label><input id="if" type="file" onchange="$('#ifmsg').textContent=''">
+    <p id="ifmsg" class="small" role="alert"></p>
     <div class="btns"><button class="btn" onclick="doImport()">Import</button></div>`);
 }
 function doImport() {
@@ -1039,14 +1143,103 @@ function doImport() {
   if (!f) return toast('Pick a file first');
   const account = val('ia'), person = val('ip');
   const r = new FileReader();
-  r.onload = async () => {
+  const say = m => { const e = $('#ifmsg'); if (e) e.textContent = m; };
+  const send = async (text, acct) => {
     closeModal(); toast('Importing…');
-    const res = await call('import', { text: r.result, account, person });
+    const res = await call('import', { text, account: acct, person }).catch(() => null);   // call() already shows the reason
+    if (!res) { if (CI) checkinModal(); return; }
+    markImported();
     toast(`✓ ${res.added} added, ${res.skipped} already there, ${res.unsorted} to sort`);
     await load();
     if (CI) { CI.imported = true; checkinModal(); }
   };
+  r.onerror = () => say('Your phone could not open this file. Try downloading it again.');
+  if (/\.pdf$/i.test(f.name) || f.type === 'application/pdf') {
+    // The PDF is read here on the phone: only the payment rows go to the Sheet, through the normal import.
+    say('Reading the PDF…');
+    pdfPages(f).then(pages => {
+      const got = btPdfToCsv(pages);
+      if (!got.days) return say('This PDF doesn\'t look like a Banca Transilvania statement. For other banks, export a CSV.');
+      if (got.bad.length) return say(`Nothing was imported: the payments read from this PDF don't add up to the bank's own total on ${got.bad.slice(0, 3).join(', ')}.`);
+      if (!got.n) return say('No payments found in this PDF.');
+      send(got.csv, 'Banca Transilvania');
+    }).catch(e => say(/password/i.test(e && e.name || '') ? 'This PDF is password protected, so it can\'t be read.' : 'The PDF could not be read. Check your internet connection and try again.'));
+    return;
+  }
+  r.onload = () => {
+    // The picker shows every file (a CSV filter hides real CSVs on some phones), so check here what was picked.
+    if (/\.xlsx?$/i.test(f.name) || /^PK/.test(r.result)) return say('This is an Excel file. SelfMate reads CSV files and Banca Transilvania PDFs. In your bank app, export the statement as CSV and pick that file.');
+    send(r.result, account);
+  };
   r.readAsText(f);
+}
+// Loaded only when a PDF is picked. The address is split in two because Google's page builder cuts lines at a double slash.
+const PDFJS = 'https:/' + '/cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+function pdfLib() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  return new Promise((ok, no) => {
+    const s = document.createElement('script');
+    s.src = PDFJS + 'pdf.min.js';
+    s.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; ok(window.pdfjsLib); };
+    s.onerror = () => no(new Error('PDF reader not reachable'));
+    document.head.appendChild(s);
+  });
+}
+async function pdfPages(file) {
+  const lib = await pdfLib();
+  const doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const pages = [];
+  for (let n = 1; n <= doc.numPages; n++) {
+    const c = await (await doc.getPage(n)).getTextContent();
+    pages.push(c.items.filter(i => i.str.trim()).map(i => ({ x: i.transform[4], y: i.transform[5], s: i.str.trim() })));
+  }
+  return pages;
+}
+// Banca Transilvania statement → CSV for the normal import. Each day ends with the bank's own totals ("RULAJ ZI"),
+// so a day that doesn't add up is reported and the whole file is refused rather than saved wrong.
+function btPdfToCsv(pages) {
+  const money = /^\d[\d,]*\.\d\d$/, num = s => +s.replace(/,/g, ''), cents = a => Math.round(a * 100);
+  const isDate = s => /^\d\d\/\d\d\/\d{4}$/.test(s), iso = s => s.slice(6) + '-' + s.slice(3, 5) + '-' + s.slice(0, 2);
+  const rows = [], bad = [];
+  let date = '', mid = 498, cur = null, currency = 'RON', days = 0, deb = 0, cre = 0, open = false;
+  pages.forEach(items => {
+    const lines = [];
+    items.slice().sort((a, b) => b.y - a.y).forEach(i => {
+      const l = lines[lines.length - 1];
+      if (l && l.y - i.y <= 2) l.items.push(i); else lines.push({ y: i.y, items: [i] });
+    });
+    let inTable = false;
+    lines.forEach(l => {
+      const its = l.items.sort((a, b) => a.x - b.x), text = its.map(i => i.s).join(' ');
+      if (/^Data Descriere Debit Credit/.test(text)) { mid = (its[2].x + its[3].x) / 2; inTable = true; return; }
+      if (/^(BANCA TRANSILVANIA S\.A\.|EXTRAS CONT|TOTAL DISPONIBIL)/.test(text)) { inTable = false; cur = null; return; }   // page footer, new account, end-of-period summary
+      if (/Cod IBAN/.test(text)) { const c = its.find(i => /^[A-Z]{3}$/.test(i.s)); if (c) currency = c.s; return; }
+      if (!inTable) return;
+      const when = its.find(i => i.x < 70 && isDate(i.s));
+      if (when) { date = when.s; open = true; }
+      const nums = its.filter(i => i.x > 380 && money.test(i.s));
+      const desc = its.filter(i => i !== when && !nums.includes(i)).map(i => i.s).join(' ');
+      if (/^RULAJ ZI/.test(desc)) {
+        const d = nums.filter(i => i.x < mid).reduce((a, i) => a + num(i.s), 0), c = nums.filter(i => i.x >= mid).reduce((a, i) => a + num(i.s), 0);
+        days++;
+        if (cents(d) !== deb || cents(c) !== cre) bad.push(date);
+        deb = cre = 0; cur = null; open = false;   // every new day starts with its date; the summary box after the last day has none
+      } else if (/^(SOLD|RULAJ|TOTAL)/.test(desc)) cur = null;
+      else if (nums.length === 1 && open) {
+        const out = nums[0].x < mid;
+        if (out) deb += cents(num(nums[0].s)); else cre += cents(num(nums[0].s));
+        cur = { date: iso(date), amount: (out ? -1 : 1) * num(nums[0].s), currency, title: desc, detail: '' };
+        rows.push(cur);
+      } else if (cur) cur.detail += ' ' + desc;
+    });
+  });
+  const csv = rows.map(r => {
+    const tid = r.detail.match(/\bTID[: ]\s*\S+\s+(.*?)(?:\s+\d{6,}\s+(?:valoare|RRN)|\s+valoare tranzactie|\s+RRN|;|$)/i);
+    const text = tid ? (/^Plata la POS/i.test(r.title) ? tid[1] : r.title + ' ' + tid[1]) : (r.title + ' ' + r.detail.split(/;|\bREF:/)[0].replace(/Transfer din card\s*\d*/i, '')).trim();
+    const m = text.replace(/[,;\t"\r\n]+/g, ' ');   // the file's only commas are the column separators
+    return [r.date, r.amount.toFixed(2), r.currency, m].join(',');
+  });
+  return { csv: 'Date,Amount,Currency,Description\n' + csv.join('\n') + '\n', n: rows.length, days, bad, rows };
 }
 
 // ---------- TRIPS ----------
@@ -2178,6 +2371,7 @@ function customiseModal() {
     <label>Weather city</label><select id="cu5">${Object.keys(CITIES).map(c => `<option ${c === city() ? 'selected' : ''}>${c}</option>`).join('')}</select>
     <label>EUR to lei rate</label><input id="cu6" type="number" inputmode="decimal" step="0.01" value="${eur()}">
     <label>Other currencies (optional, lei for 1 unit)</label><input id="cu7" value="${esc(s.OtherRates || '')}" placeholder="e.g. GBP 5.86, USD 4.40">
+    <label>Ask me about every payment for the next … imports (0 = sort automatically)</label><input id="cu8" type="number" inputmode="numeric" min="0" step="1" value="${s.ReviewImports === undefined || s.ReviewImports === '' ? 5 : +s.ReviewImports || 0}">
     <div class="btns"><button class="btn" onclick="saveNames()">Save names</button></div>
     <h2>Growing savings (goals)</h2>
     ${D.goals.map(g => `<div class="row" onclick="goalModal(${g._row})"><span class="emo">${esc(g.Emoji)}</span><div class="grow"><div>${esc(g.Goal)}</div>
@@ -2193,7 +2387,7 @@ function customiseModal() {
 }
 async function saveNames() {
   const pairs = [['OwnerName', val('cu1')], ['PartnerName', val('cu2')], ['SrlName', val('cu3') || 'SRL'], ['ProjectsName', val('cu4') || 'Hobbies'],
-                 ['City', val('cu5')], ['EurRate', +val('cu6') || 5], ['OtherRates', val('cu7')]];
+                 ['City', val('cu5')], ['EurRate', +val('cu6') || 5], ['OtherRates', val('cu7')], ['ReviewImports', Math.max(0, parseInt(val('cu8'), 10) || 0)]];
   for (const p of pairs) await call('setSetting', { key: p[0], value: p[1] });
   try { sessionStorage.removeItem('sm_wx'); } catch (e) { /* fine */ }
   WX = null; toast('Saved ✓'); await load(); customiseModal();
@@ -2203,7 +2397,7 @@ const tagged = tag => D.categories.filter(c => c.Tag === tag).map(c => c.Categor
 function categoryModal(row) {
   const c = row ? D.categories.find(x => x._row === row) : { Emoji: '📌', Type: 'flex', Group: '🍽 Food' };
   const groups = [...new Set(D.categories.map(x => x.Group))];
-  const types = [['flex', 'Everyday (counts in "safe to spend")'], ['fixed', 'Fixed monthly bill'], ['pot', 'Paid from the yearly-bills pot'],
+  const types = [['flex', 'Everyday (counts in the monthly plan)'], ['fixed', 'Fixed monthly bill'], ['pot', 'Paid from the yearly-bills pot'],
                  ['savings', 'Savings'], ['project', 'Project'], ['income', 'Income'], ['ignore', 'Ignore (transfers)']];
   openModal(`<h3>${row ? 'Edit category' : 'New category'}</h3>
     <label>Name</label><input id="cn" value="${esc(c.Category)}">
@@ -2288,10 +2482,10 @@ function insights() {
   // 6. emergency buffer in months of everyday costs (cash + savings balances + the emergency goal)
   const essentials = spendOf(t => !isTravel(t)) / 12;   // spendOf already leaves out savings and hobby projects
   const goalBuf = sum(D.goals.filter(g => /emergency|buffer|urgenta/i.test(g.Goal)), g => g.Saved);
-  const ready = sum((D.balances || []).filter(b => b.Kind === 'cash' || b.Kind === 'savings'), inLei) + goalBuf;
+  const ready = Math.max(sum((D.balances || []).filter(b => b.Kind === 'cash' || b.Kind === 'savings'), inLei), goalBuf);   // the same money can be in both: count it once
   if (essentials > 0) { const months = ready / essentials;
     out.push({ score: months < 1 ? 80 : months < 3 ? 60 : 20, emoji: '🛟', title: `Your safety cushion covers ${months.toFixed(1)} months`,
-      body: `Everyday costs (without travel and hobby projects) are about ${lei(essentials)} a month. Cash, savings and your emergency goal add up to ${lei(ready)}.`
+      body: `Everyday costs (without travel and hobby projects) are about ${lei(essentials)} a month. You have ${lei(ready)} ready in cash and savings (or your emergency goal, if that is higher).`
         + ((D.balances || []).every(b => !+b.Amount) ? ' Add your cash and savings in Money → "Your money right now" to make this exact.' : ''),
       tips: months < 3 ? [`Aim for 3 months (${lei(essentials * 3)}). A savings cushion is the strongest sign of financial wellbeing in the CFPB research.`,
                           'Keep it in a separate account or vault, so it is not counted as spending money.',
@@ -2337,7 +2531,434 @@ function insightsModal() {
     ${list.map(insightCard).join('') || '<p class="muted">Not enough data yet. Import a few months of statements first.</p>'}`);
 }
 
-// ---------- WISHLIST (inside Money): new wants wait a little before you decide ----------
+// ---------- NOTES: ideas, lists, shopping, to-dos (the way Google Keep and the best-rated to-do apps do it) ----------
+// Quick to capture, nothing to press to save, tick things straight on the card. Your own, unless you share one with the other person.
+const NOTE_COLORS = ['', 'butter', 'leaf', 'sky', 'rose', 'lilac', 'sand'];
+const NOTE_LIMIT = 45000;   // one Sheet cell
+const NOTE_WAIT = 'selfmate_notes_waiting_' + KEY.slice(0, 8);
+const noteNorm = s => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();   // search ignores diacritics
+const nLabels = n => String(n.Labels || '').split(',').map(x => x.trim()).filter(Boolean);
+const nItems = body => String(body || '').split('\n').filter(l => l.trim()).map(l => {
+  const m = l.match(/^\s*\[([ xX]?)\]\s?(.*)$/);
+  return m ? { t: m[2], on: !!m[1].trim() } : { t: l.trim(), on: false };
+});
+const nBody = items => items.map(i => (i.on ? '[x] ' : '[ ] ') + i.t).join('\n');
+const nMine = n => (n.Owner || 'owner') === D.role;
+const nOther = () => D.role === 'owner' ? (D.settings.PartnerName || 'your partner') : (D.settings.OwnerName || 'the owner');
+const noteId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+// A note that could not reach the Sheet stays on this phone until it can, so what you wrote is never lost.
+let NW_MEM = null;   // when the phone refuses to store it: kept for as long as the app stays open
+function nWaiting() { if (NW_MEM) return NW_MEM; try { return JSON.parse(localStorage.getItem(NOTE_WAIT) || '[]'); } catch (e) { return []; } }
+function nWaitSet(list) {
+  const put = () => { list.length ? localStorage.setItem(NOTE_WAIT, JSON.stringify(list)) : localStorage.removeItem(NOTE_WAIT); NW_MEM = null; };
+  try { put(); } catch (e) {
+    try { localStorage.removeItem(CKEY); put(); } catch (e2) { NW_MEM = list; }   // the saved copy of the data can be fetched again; a note can't
+  }
+}
+const nWaitPut = w => nWaitSet(nWaiting().filter(x => x.id !== w.id).concat([w]));
+const nWaitDrop = id => nWaitSet(nWaiting().filter(x => x.id !== id));
+const nWaitErr = (id, e) => nWaitSet(nWaiting().map(x => x.id === id ? Object.assign(x, { err: String((e && e.message) || e || '').slice(0, 200) }) : x));
+function notes() {
+  const list = (D.notes || []).slice();
+  nWaiting().forEach(w => {
+    const i = list.findIndex(n => n.Id === w.id), row = Object.assign({}, i >= 0 ? list[i] : { Owner: D.role }, w.note, { Id: w.id });
+    if (i >= 0) list[i] = row; else list.push(row);
+  });
+  return list;
+}
+// The same change on any list of notes: the phone's copy right away, and the sample data in preview.
+function noteApply(list, d, role) {
+  const mine = n => (n.Owner || 'owner') === role, one = list.find(n => n.Id === d.id);
+  if (d.op === 'save') { if (one) Object.assign(one, d.note); else list.push(Object.assign({ Id: d.id, Owner: role }, d.note)); }
+  if (d.op === 'tick' && one) {
+    const items = nItems(one.Body), it = items[d.i] && items[d.i].t === d.text ? items[d.i] : items.find(x => x.t === d.text);
+    if (it) { it.on = !!d.on; one.Body = nBody(items); }
+  }
+  if (d.op === 'status' && one) one.Status = d.status || '';
+  if (d.op === 'delete') return list.filter(n => n !== one);
+  if (d.op === 'emptyBin') return list.filter(n => !(mine(n) && n.Status === 'bin'));
+  if (d.op === 'renameLabel') list.forEach(n => {
+    const from = d.from.toLowerCase();
+    if (nLabels(n).some(x => x.toLowerCase() === from)) n.Labels = nLabels(n).map(x => x.toLowerCase() === from ? d.to : x).filter(Boolean).join(', ');
+  });
+  return list;
+}
+const NSENDING = {};
+async function noteSend(d, msg) {
+  const my = ++SEQ, plain = msg === 'Saved ✓';   // "Saved" only once the Sheet has it
+  if (d.id) NSENDING[d.id] = 1;   // on its way: not a problem to warn about
+  if (D) { D.notes = noteApply(D.notes || [], d, D.role); render(); }
+  if (msg) toast(plain ? 'Saving…' : msg);
+  try {
+    const res = await call('note', d);
+    if (d.op === 'save') nWaitDrop(d.id);
+    if (plain) toast(msg);
+    const one = D && (D.notes || []).find(n => n.Id === d.id);
+    if (one && res && res.Changed) { one.Changed = res.Changed; if (res.Body != null) one.Body = res.Body; }
+  } catch (e) {   // a note stays waiting on this phone; anything else goes back to what is stored
+    delete NSENDING[d.id];
+    if (d.op === 'save') nWaitErr(d.id, e);
+    SEQ++; await load(); return;
+  }
+  delete NSENDING[d.id];
+  if (my === SEQ) await load();
+}
+// Send what is waiting (from a failed save, or from an editor the phone closed), once each time the app starts or on Retry.
+let NFLUSHED = false;
+async function noteFlush(force) {
+  if ((NFLUSHED && !force) || !D) return;
+  NFLUSHED = true;
+  const list = nWaiting().filter(w => !NSENDING[w.id] && !(NE && NE.id === w.id));
+  let sent = 0;
+  for (const w of list) {
+    NSENDING[w.id] = 1;
+    const res = await call('note', w).catch(e => { nWaitErr(w.id, e); return null; });
+    delete NSENDING[w.id];
+    if (res) { nWaitDrop(w.id); sent++; }
+  }
+  if (sent) { toast(sent + ' waiting note' + (sent > 1 ? 's' : '') + ' saved ✓'); await load(); }
+  else if (list.length && D && TAB === 'notes' && !NE) render();
+}
+function noteForget(id) { if (confirm('Throw away what is waiting on this phone for this note?')) { nWaitDrop(id); render(); } }
+
+// ---------- the Notes page ----------
+function nMatches(n, q) {
+  return noteNorm([n.Title, n.Kind === 'list' ? nItems(n.Body).map(i => i.t).join(' ') : n.Body, n.Labels].join(' ')).includes(q);
+}
+function nShown() {
+  const all = notes(), v = SEG.nv || 'all', q = noteNorm(SEG.ns || '').trim();
+  const pool = v === 'bin' ? all.filter(n => n.Status === 'bin') : v === 'archive' ? all.filter(n => n.Status === 'archived')
+    : q ? all.filter(n => n.Status !== 'bin') : all.filter(n => !n.Status);
+  let list = pool;
+  if (v === 'shared') list = list.filter(n => n.Shared === 'yes');
+  if (v === 'due') list = list.filter(n => n.Due);
+  if (v.startsWith('label:')) { const l = v.slice(6).toLowerCase(); list = list.filter(n => nLabels(n).some(x => x.toLowerCase() === l)); }
+  if (q) list = list.filter(n => nMatches(n, q));
+  return list.slice().sort((a, b) => v === 'due' ? (a.Due < b.Due ? -1 : a.Due > b.Due ? 1 : 0) : (+b.Created || 0) - (+a.Created || 0));
+}
+function noteLink(text) {
+  return esc(text).replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${u.length > 34 ? u.slice(0, 32) + '…' : u}</a>`);
+}
+function noteCard(n) {
+  let inside = '';
+  if (n.Kind === 'list') {
+    const items = nItems(n.Body).map((it, i) => Object.assign(it, { i })), open = items.filter(x => !x.on), done = items.length - open.length;
+    inside = open.slice(0, 8).map(x => `<div class="nline"><button class="ncheck" aria-label="Tick ${esc(x.t)}" onclick="noteTick(event,this,${x.i})"></button><span class="grow">${noteLink(x.t)}</span></div>`).join('')
+      + (open.length > 8 ? `<div class="muted small">+ ${open.length - 8} more</div>` : '')
+      + (done ? `<div class="muted small" style="margin-top:3px">✓ ${done} ticked</div>` : '')
+      + (!items.length ? '<div class="muted small">Empty list</div>' : '');
+  } else if (n.Body) inside = `<div class="ntxt">${noteLink(String(n.Body).slice(0, 700))}</div>`;
+  const left = n.Due ? days(n.Due) : 0, canDone = n.Due && nMine(n) && !n.Status;
+  const dueTag = n.Due ? `<span class="pill ${left < 0 ? 'p-bad' : left <= 1 ? 'p-warn' : 'p-ok'}">📅 ${left === 0 ? 'Today' : left === 1 ? 'Tomorrow' : left < 0 ? -left + 'd late' : new Date(n.Due + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>` : '';
+  const meta = [n.Status === 'archived' && SEG.nv !== 'archive' ? '<span class="ntag">🗄️ Archive</span>' : '',
+    dueTag, canDone ? `<button class="pill p-good" aria-label="Mark as done" onclick="noteDone(event,this)">✓ Done</button>` : '',
+    n.Shared === 'yes' ? `<span class="ntag">👥${nMine(n) ? '' : ' From ' + esc(nOther())}</span>` : ''].concat(nLabels(n).map(l => `<span class="ntag">${esc(l)}</span>`)).filter(Boolean).join('');
+  return `<div class="ncard nc-${esc(n.Color)}" data-id="${esc(n.Id)}" role="button" tabindex="0" onclick="noteOpen(this.dataset.id)" onkeydown="if(event.key==='Enter'&&event.target===this)noteOpen(this.dataset.id)">
+    ${n.Pinned === 'yes' && n.Title ? `<span style="float:right;font-size:12px">📌</span>` : ''}${n.Title ? `<b>${esc(n.Title)}</b>` : ''}${inside}
+    ${meta ? `<div class="nmeta">${meta}</div>` : ''}</div>`;
+}
+function noteGrid() {
+  const v = SEG.nv || 'all', list = nShown();
+  if (!list.length) return `<p class="muted" style="margin-top:18px">${SEG.ns ? 'Nothing found.' : v === 'bin' ? 'The bin is empty.' : v === 'archive' ? 'Nothing in the archive.' : v === 'due' ? 'Nothing with a date. 🌿' : notes().some(n => !n.Status) ? 'No notes here yet.' : 'Your first note goes above.'}</p>`;
+  const pins = v === 'bin' || v === 'archive' || v === 'due' ? [] : list.filter(n => n.Pinned === 'yes'), rest = list.filter(n => !pins.includes(n));
+  const grid = a => `<div class="ngrid">${a.map(noteCard).join('')}</div>`;
+  return (pins.length ? `<div class="label" style="margin:14px 0 6px">📌 Pinned</div>${grid(pins)}${rest.length ? '<div class="label" style="margin:14px 0 6px">Others</div>' : ''}` : '<div style="height:12px"></div>') + (rest.length ? grid(rest) : '');
+}
+function viewNotes() {
+  const all = notes(), v = SEG.nv || 'all', active = all.filter(n => !n.Status);
+  const labels = {}, seen = {};
+  active.forEach(n => nLabels(n).forEach(l => { const k = l.toLowerCase(); if (!seen[k]) { seen[k] = 1; labels[l] = 0; } }));
+  const names = Object.keys(labels).sort((a, b) => a.localeCompare(b));
+  const dueN = active.filter(n => n.Due).length, sharedN = active.filter(n => n.Shared === 'yes').length;
+  const binN = all.filter(n => n.Status === 'bin').length, archN = all.filter(n => n.Status === 'archived').length;
+  const chip = (key, text) => `<button class="chip ${v === key ? 'on' : ''}" data-v="${esc(key)}" onclick="noteView(this.dataset.v)">${text}</button>`;
+  const wait = nWaiting().filter(w => !NSENDING[w.id] && !(NE && NE.id === w.id));   // only what really got stuck
+  const empty = !all.length ? `<div class="chips" style="margin-top:14px">
+      <button class="chip" onclick="noteOpen(0,{Kind:'list',Title:'Shopping',Labels:'Shopping'})">🛒 Shopping list</button>
+      <button class="chip" onclick="noteOpen(0,{Kind:'list',Title:'To do',Labels:'To do'})">✅ To-do list</button>
+      <button class="chip" onclick="noteOpen(0,{Kind:'note',Labels:'Ideas'})">💡 Idea</button></div>` : '';
+  const title = v === 'bin' ? '🗑️ Bin' : v === 'archive' ? '🗄️ Archive' : 'Notes';
+  const special = v === 'bin' || v === 'archive';
+  return `<div class="label">Ideas, lists, shopping, to-dos</div><h1>${title}</h1>
+    ${wait.length ? `<div class="alert"><div>⚠️ ${wait.length} note${wait.length > 1 ? 's are' : ' is'} still only on this phone: ${wait.map(w => esc(w.note.Title || String(w.note.Body || '').slice(0, 24) || 'Untitled')).join(', ')}${wait.some(w => w.err) ? `<div class="small" style="font-weight:400;margin-top:4px">The reason: ${esc(wait.find(w => w.err).err)}</div>` : ''}</div>
+      <div class="btns" style="margin-bottom:0"><button class="btn" onclick="noteFlush(true)">Try again</button>${wait.length === 1 ? `<button class="btn ghost" data-id="${esc(wait[0].id)}" onclick="noteForget(this.dataset.id)">Throw away</button>` : ''}</div></div>` : ''}
+    ${special ? `<button class="back" onclick="noteView('all')">‹ All notes</button>${v === 'bin' && binN ? `<button class="btn ghost wide" style="margin:8px 0" onclick="noteEmptyBin()">Empty the bin (${binN})</button>` : ''}` : `
+    <div class="nquick"><input id="nq" placeholder="Take a note…" aria-label="Take a note" enterkeyhint="done" value="${esc(SEG.nqa)}" oninput="SEG.nqa=this.value" onkeydown="if(isEnter(event)){event.preventDefault();noteQuick()}" onbeforeinput="if(isEnterInput(event)){event.preventDefault();noteQuick()}">
+      <button onclick="noteQuickOpen('list')" aria-label="New list" title="New list">☑️</button><button onclick="noteQuickOpen('note')" aria-label="New note" title="New note">📝</button></div>
+    ${all.length ? `<input id="ns" class="nsearch" type="search" placeholder="🔍 Search" aria-label="Search notes" value="${esc(SEG.ns)}" oninput="SEG.ns=this.value;$('#ngrid').innerHTML=noteGrid()">
+    <div class="chips">${chip('all', 'All')}${dueN ? chip('due', '📅 Due · ' + dueN) : ''}${sharedN ? chip('shared', '👥 Shared') : ''}${names.map(l => chip('label:' + l, esc(l))).join('')}${names.length ? `<button class="chip" onclick="noteLabelsModal()" aria-label="Edit labels">✏️ Labels</button>` : ''}</div>` : empty}`}
+    <div id="ngrid">${noteGrid()}</div>
+    ${special || (!archN && !binN) ? '' : `<div class="chips" style="margin-top:18px">${chip('archive', '🗄️ Archive · ' + archN)}${chip('bin', '🗑️ Bin · ' + binN)}</div>`}`;
+}
+function noteView(v) { SEG.nv = v; if (v === 'bin' || v === 'archive') SEG.ns = ''; render(); window.scrollTo(0, 0); }
+function nStart() {   // what a new note gets from the view you are in
+  const v = SEG.nv || 'all';
+  return v.startsWith('label:') ? { Labels: v.slice(6) } : {};
+}
+function noteQuick() {
+  const text = val('nq');
+  if (!text) return;
+  SEG.nqa = '';
+  noteSave(noteId(), Object.assign({ Kind: 'note', Title: '', Body: text, Color: '', Labels: '', Pinned: '', Due: '', Status: '', Shared: '', Created: Date.now() }, nStart()), null, 'Saved ✓');
+}
+function noteQuickOpen(kind) {
+  const text = val('nq');
+  SEG.nqa = '';
+  noteOpen(0, Object.assign({ Kind: kind, _dirty: !!text }, nStart(), kind === 'list' ? { Title: text } : { Body: text }));
+}
+function noteSave(id, note, base, msg) {
+  const d = { op: 'save', id, note, base: base || null };
+  nWaitPut(d);
+  return noteSend(d, msg);
+}
+function noteTick(ev, btn, i) {
+  ev.stopPropagation();
+  const n = notes().find(x => x.Id === btn.closest('.ncard').dataset.id), it = n && nItems(n.Body)[i];
+  if (it) noteSend({ op: 'tick', id: n.Id, i, text: it.t, on: !it.on });
+}
+function noteDone(ev, btn) {
+  ev.stopPropagation();
+  noteSend({ op: 'status', id: btn.closest('.ncard').dataset.id, status: 'archived' }, 'Done ✓ Moved to the archive');
+}
+function noteEmptyBin() { if (confirm('Delete everything in the bin for good?')) noteSend({ op: 'emptyBin' }, 'Bin emptied'); }
+function noteLabelsModal() {
+  const seen = {}, names = [];
+  notes().filter(n => n.Status !== 'bin').forEach(n => nLabels(n).forEach(l => { if (!seen[l.toLowerCase()]) { seen[l.toLowerCase()] = 1; names.push(l); } }));
+  openModal(`<h3>🏷️ Labels</h3><p class="muted small">Change a name, or remove a label from all notes. The notes themselves stay.</p>
+    ${names.sort((a, b) => a.localeCompare(b)).map(l => `<div class="inline"><input value="${esc(l)}" data-l="${esc(l)}" aria-label="Label name" onchange="noteLabelRename(this.dataset.l,this.value.trim())">
+      <button class="btn ghost" data-l="${esc(l)}" aria-label="Remove label" onclick="noteLabelRename(this.dataset.l,'')">🗑️</button></div>`).join('') || '<p class="muted">No labels left.</p>'}
+    <div class="btns"><button class="btn" onclick="closeModal()">Done</button></div>`);
+}
+async function noteLabelRename(from, to) {
+  to = to.replace(/,/g, ' ').trim();
+  if (from === to) return;
+  if (!to && !confirm('Remove "' + from + '" from all notes?')) return;
+  if ((SEG.nv || '').toLowerCase() === 'label:' + from.toLowerCase()) SEG.nv = to ? 'label:' + to : 'all';
+  noteSend({ op: 'renameLabel', from, to }, to ? 'Renamed ✓' : 'Removed ✓');
+  noteLabelsModal();
+}
+
+// ---------- one note open: everything saves by itself when you leave it ----------
+let NE = null;
+const neState = () => JSON.stringify({ t: NE.title, k: NE.kind, b: neBody(), c: NE.color, l: NE.labels, p: NE.pinned, d: NE.due, s: NE.status, h: NE.shared });
+function neBody() { return NE.kind === 'list' ? nBody(NE.items.filter(i => i.t.trim())) : NE.body; }
+function noteOpen(id, pre) {
+  const n = id ? notes().find(x => x.Id === id) : null;
+  if (id && !n) return toast('This note is gone');
+  if (n && n.Status === 'bin') return noteBinModal(n);
+  const src = n || Object.assign({ Kind: 'note' }, pre || {}), w = n ? nWaiting().find(x => x.id === n.Id) : null;
+  openModal('');
+  NE = { id: n ? n.Id : noteId(), isNew: !n, base: w ? w.base : n ? { Changed: n.Changed, Body: n.Body } : null, title: String(src.Title || ''), kind: src.Kind === 'list' ? 'list' : 'note',
+         body: String(src.Body || ''), items: src.Kind === 'list' ? nOrder(nItems(src.Body)) : [], color: src.Color || '', labels: nLabels(src), pinned: src.Pinned === 'yes', due: src.Due || '',
+         status: src.Status || '', shared: src.Shared === 'yes', mine: n ? nMine(n) : true, created: n ? n.Created : Date.now(), panel: '', waited: w || null, drafted: false };
+  NE.was = pre && pre._dirty ? '' : neState();
+  MODAL_LEAVE = noteLeave;
+  $('#sheet').classList.add('nsh');
+  neDraw();
+  setTimeout(() => {
+    const go1 = !n && NE ? (NE.kind === 'list' ? $('#neadd') : $('#neb')) : null;
+    if (go1) { go1.focus(); if (go1.setSelectionRange) go1.setSelectionRange(go1.value.length, go1.value.length); }
+  }, 60);
+}
+const nOrder = items => items.filter(i => !i.on).concat(items.filter(i => i.on));
+function neDraw(focus) {
+  const s = $('#sheet');
+  NOTE_COLORS.forEach(c => c && s.classList.remove('nc-' + c));
+  if (NE.color) s.classList.add('nc-' + NE.color);
+  s.innerHTML = `<div class="nedit">
+    <div class="nehead"><input id="net" class="ntitle" placeholder="Title" aria-label="Title" value="${esc(NE.title)}" enterkeyhint="next" onkeydown="if(isEnter(event)){event.preventDefault();const e=$('#neb')||$('#neadd');if(e)e.focus()}">
+      <button class="${NE.pinned ? 'on' : ''}" aria-label="${NE.pinned ? 'Unpin' : 'Pin'}" aria-pressed="${NE.pinned}" onclick="neSync();NE.pinned=!NE.pinned;neDraw()">📌</button></div>
+    <div id="nebody">${neBodyHtml()}</div>
+    <div class="nmeta" id="nemeta">${neMetaHtml()}</div>
+    <div class="npanel" id="nepanel">${nePanelHtml()}</div>
+    <div class="netools">${[['color', '🎨', 'Colour'], ['labels', '🏷️', 'Labels'], ['due', '📅', 'Date']].concat(NE.mine ? [['share', '👥', 'Share']] : []).concat([['more', '⋯', 'More']]).map(t =>
+      `<button class="${NE.panel === t[0] ? 'on' : ''}" aria-label="${t[2]}" onclick="neTool('${t[0]}')">${t[1]}</button>`).join('')}
+      <button class="btn" onclick="closeModal()">Done</button></div></div>`;
+  document.querySelectorAll('.nedit textarea').forEach(neGrow);
+  if (focus) { const e = document.querySelector(focus); if (e) { e.focus(); if (e.setSelectionRange) e.setSelectionRange(e.value.length, e.value.length); } }
+}
+const neGrow = e => { e.style.height = 'auto'; e.style.height = e.scrollHeight + 'px'; };
+function neBodyHtml() {
+  if (NE.kind !== 'list') return `<textarea id="neb" rows="5" placeholder="Note…" aria-label="Note" oninput="neGrow(this)">${esc(NE.body)}</textarea>`;
+  const open = NE.items.filter(i => !i.on), done = NE.items.filter(i => i.on);
+  const row = (it, i) => `<div class="nitem ${it.on ? 'on' : ''}" data-on="${it.on ? 1 : 0}">
+      ${it.on ? '' : '<span class="ngrip" aria-hidden="true" onpointerdown="neDrag(event)">⠿</span>'}
+      <button class="ncheck ${it.on ? 'on' : ''}" aria-label="${it.on ? 'Untick' : 'Tick'}" onclick="neTick(${i})">${it.on ? '✓' : ''}</button>
+      <textarea rows="1" aria-label="Item" enterkeyhint="next" oninput="neItemInput(this,${i})" onkeydown="neKey(event,${i})" onpaste="nePaste(event,${i})">${esc(it.t)}</textarea>
+      <button class="nx" aria-label="Remove" onclick="neDel(${i})">✕</button></div>`;
+  return `<div id="neopen">${open.map(row).join('')}</div>
+    <div class="nitem"><span class="ngrip" style="visibility:hidden">⠿</span><span style="width:20px;flex:none;text-align:center;color:var(--muted)">+</span>
+      <input id="neadd" placeholder="Add an item" aria-label="Add an item" enterkeyhint="next" style="flex:1;min-width:0;padding:2px 0" onkeydown="if(isEnter(event)){event.preventDefault();neAdd()}" onbeforeinput="if(isEnterInput(event)){event.preventDefault();neAdd()}" onpaste="nePaste(event,-1)"></div>
+    ${done.length ? `<div class="nticked"><span>✓ ${done.length} ticked</span><span><button onclick="neUntickAll()">Untick all</button> <button onclick="neClearTicked()">Clear</button></span></div>
+      <div>${done.map((it, i) => row(it, open.length + i)).join('')}</div>` : ''}`;
+}
+function neMetaHtml() {
+  return [NE.due ? `<span class="pill p-ok">📅 ${esc(fmt(NE.due))}</span>` : '', NE.shared ? `<span class="ntag">👥 Shared with ${esc(NE.mine ? nOther() : 'you')}</span>` : ''].concat(NE.labels.map(l => `<span class="ntag">${esc(l)}</span>`)).filter(Boolean).join('');
+}
+function nePanelHtml() {
+  const p = NE.panel;
+  if (p === 'color') return `<div class="chips">${NOTE_COLORS.map(c => `<button class="nswatch ${c ? 'nc-' + c : ''} ${c === NE.color ? 'on' : ''}" aria-label="${c || 'No colour'}" onclick="neColor('${c}')">${c === NE.color ? '✓' : ''}</button>`).join('')}</div>`;
+  if (p === 'labels') {
+    const seen = {}, names = [];
+    notes().concat([{ Labels: NE.labels.join(',') }]).forEach(n => nLabels(n).forEach(l => { if (!seen[l.toLowerCase()]) { seen[l.toLowerCase()] = 1; names.push(l); } }));
+    return `<div class="chips">${names.sort((a, b) => a.localeCompare(b)).map(l => `<button class="chip ${NE.labels.some(x => x.toLowerCase() === l.toLowerCase()) ? 'on' : ''}" data-l="${esc(l)}" onclick="neLabel(this.dataset.l)">${esc(l)}</button>`).join('')}</div>
+      <input id="nel" placeholder="New label, e.g. Shopping" aria-label="New label" enterkeyhint="done" onkeydown="if(isEnter(event)){event.preventDefault();neLabel(this.value)}" onbeforeinput="if(isEnterInput(event)){event.preventDefault();neLabel(this.value)}" onchange="if(this.value.trim())neLabel(this.value)">`;
+  }
+  if (p === 'due') {
+    return `<div class="chips"><button class="chip" onclick="neDue(0)">Today</button><button class="chip" onclick="neDue(1)">Tomorrow</button><button class="chip" onclick="neDue(7)">In a week</button>${NE.due ? `<button class="chip" onclick="neDue(null)">No date</button>` : ''}</div>
+      <input id="ned" type="date" aria-label="Date" value="${esc(NE.due)}" onchange="neSync();NE.due=this.value;neDraw()">`;
+  }
+  if (p === 'share') {
+    return `<div class="acts"><button onclick="neSync();NE.shared=!NE.shared;neDraw()">${NE.shared ? '🔒 Stop sharing' : '👥 Share with ' + esc(nOther())}</button></div>
+      <p class="muted small" style="margin:6px 0 0">${NE.shared ? `${esc(nOther())} sees this note and can change it.` : `Only you see this note. Share it and ${esc(nOther())} can see and change it too. Good for a shopping list.`}</p>`;
+  }
+  if (p === 'more') {
+    return `<div class="acts"><button onclick="neConvert()">${NE.kind === 'list' ? '📝 Turn into a text note' : '☑️ Turn into a list'}</button>
+      <button onclick="neCopy()">📄 Make a copy${NE.kind === 'list' ? ' (all unticked)' : ''}</button>
+      ${NE.mine ? `<button onclick="neStatus('${NE.status === 'archived' ? '' : 'archived'}')">🗄️ ${NE.status === 'archived' ? 'Take out of the archive' : 'Archive'}</button><button onclick="neStatus('bin')">🗑️ Move to the bin</button>` : ''}</div>
+      ${NE.mine ? '' : `<p class="muted small" style="margin:6px 0 0">Only ${esc(nOther())} can archive or remove this note.</p>`}`;
+  }
+  return '';
+}
+function neSync() {   // what is on screen → the note being edited
+  const t = $('#net'); if (t) NE.title = t.value;
+  if (NE.kind !== 'list') { const b = $('#neb'); if (b) NE.body = b.value; return; }
+  const rows = [...document.querySelectorAll('#nebody .nitem[data-on]')].map(r => ({ t: r.querySelector('textarea').value.replace(/\n/g, ' '), on: r.dataset.on === '1' }));
+  NE.items = nOrder(rows);
+  const a = $('#neadd');
+  if (a && a.value.trim()) { nePush(a.value); a.value = ''; }
+}
+// Adding something that is already ticked brings it back instead of writing it twice (handy for shopping).
+function nePush(text, at) {
+  text = String(text).trim();
+  if (!text) return;
+  const old = NE.items.find(i => i.on && i.t.trim().toLowerCase() === text.toLowerCase());
+  if (old) { old.on = false; NE.items = nOrder(NE.items); return; }
+  const it = { t: text, on: false };
+  if (at == null) { const n = NE.items.filter(i => !i.on).length; NE.items.splice(n, 0, it); } else NE.items.splice(at, 0, it);
+}
+function neAdd() { neSync(); neDraw('#neadd'); const a = $('#neadd'); if (a) a.scrollIntoView({ block: 'nearest' }); }
+function neTick(i) { neSync(); NE.items[i].on = !NE.items[i].on; NE.items = nOrder(NE.items); neDraw(); }
+function neDel(i) { neSync(); NE.items.splice(i, 1); neDraw(); }
+const isEnter = e => e.key === 'Enter' || e.keyCode === 13;
+const isEnterInput = e => e.inputType === 'insertLineBreak' || e.inputType === 'insertParagraph';
+function neItemInput(el, i) {   // some phone keyboards put a new line in the text instead of sending Enter: that makes a new item too
+  if (!/\n/.test(el.value)) return neGrow(el);
+  const parts = el.value.split('\n').map(x => x.trim());
+  el.value = parts[0];
+  neSync();
+  NE.items.splice(i + 1, 0, ...(parts.slice(1).filter(Boolean).length ? parts.slice(1).filter(Boolean) : ['']).map(t => ({ t, on: !!NE.items[i].on })));
+  neDraw();
+  const rows = document.querySelectorAll('#nebody .nitem[data-on] textarea');
+  if (rows[i + 1]) rows[i + 1].focus();
+}
+function neKey(e, i) {
+  if (isEnter(e)) {
+    e.preventDefault(); neSync();
+    NE.items.splice(i + 1, 0, { t: '', on: !!NE.items[i].on });
+    neDraw();
+    const rows = document.querySelectorAll('#nebody .nitem[data-on] textarea');
+    if (rows[i + 1]) rows[i + 1].focus();
+  } else if (e.key === 'Backspace' && !e.target.value) {
+    e.preventDefault(); neSync();
+    NE.items.splice(i, 1);
+    neDraw();
+    const rows = document.querySelectorAll('#nebody .nitem[data-on] textarea'), to = rows[i - 1] || $('#neadd');
+    if (to) { to.focus(); if (to.setSelectionRange) to.setSelectionRange(to.value.length, to.value.length); }
+  }
+}
+function nePaste(e, i) {   // several lines pasted become several items
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  if (!/\n/.test(text)) return;
+  e.preventDefault(); neSync();
+  let at = i < 0 ? null : i + 1;
+  text.split(/\r?\n/).map(l => l.replace(/^\s*(?:\[[ xX]?\]|[-*•])\s*/, '').trim()).filter(Boolean).forEach(l => { nePush(l, at); if (at != null) at++; });
+  neDraw('#neadd');
+}
+function neUntickAll() { neSync(); NE.items.forEach(i => { i.on = false; }); neDraw(); }
+function neClearTicked() { neSync(); NE.items = NE.items.filter(i => !i.on); neDraw(); }
+function neDrag(e) {   // the handle on the left of an item: drag it up or down
+  e.preventDefault();
+  const row = e.target.closest('.nitem'), box = row.parentNode;
+  row.classList.add('drag');
+  const move = ev => {
+    const over = document.elementFromPoint(ev.clientX, ev.clientY), o = over && over.closest('.nitem');
+    if (!o || o === row || o.parentNode !== box) return;
+    const r = o.getBoundingClientRect();
+    const kids = [...box.children], from = kids.indexOf(row), to = kids.indexOf(o), after = ev.clientY >= r.top + r.height / 2;
+    if (to > from) kids.slice(from + 1, after ? to + 1 : to).forEach(k => box.insertBefore(k, row));
+    else kids.slice(after ? to + 1 : to, from).reverse().forEach(k => box.insertBefore(k, row.nextSibling));
+  };
+  const up = () => { ['pointermove', 'pointerup', 'pointercancel'].forEach((n, k) => window.removeEventListener(n, k ? up : move)); row.classList.remove('drag'); neSync(); neDraw(); };
+  window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+}
+function neTool(p) { neSync(); NE.panel = NE.panel === p ? '' : p; neDraw(); if (NE.panel) { const e = $('#nepanel'); if (e) e.scrollIntoView({ block: 'nearest' }); } }
+function neColor(c) { neSync(); NE.color = c; neDraw(); }
+function neLabel(name) {
+  neSync();
+  name = String(name).replace(/,/g, ' ').trim().slice(0, 40);
+  if (!name) return;
+  const had = NE.labels.some(x => x.toLowerCase() === name.toLowerCase());
+  NE.labels = had ? NE.labels.filter(x => x.toLowerCase() !== name.toLowerCase()) : NE.labels.concat([name]);
+  neDraw();
+}
+function neDue(n) { neSync(); NE.due = n == null ? '' : plusDays(n); neDraw(); }
+function neConvert() {
+  neSync();
+  if (NE.kind === 'list') { NE.body = NE.items.filter(i => i.t.trim()).map(i => i.t).join('\n'); NE.items = []; NE.kind = 'note'; }
+  else { NE.items = NE.body.split('\n').map(l => l.replace(/^\s*(?:\[[ xX]?\]|[-*•])\s*/, '').trim()).filter(Boolean).map(t => ({ t, on: false })); NE.body = ''; NE.kind = 'list'; }
+  NE.panel = ''; neDraw();
+}
+function neCopy() {
+  neSync();
+  const copy = { Kind: NE.kind, Title: NE.title, Body: NE.kind === 'list' ? nBody(NE.items.filter(i => i.t.trim()).map(i => ({ t: i.t, on: false }))) : NE.body, Color: NE.color, Labels: NE.labels.join(', '), _dirty: true };
+  noteOpen(0, copy);   // leaving this note saves it
+}
+function neStatus(s) { neSync(); NE.status = s; closeModal(); }
+function noteLeave() {
+  const e = NE;
+  if (!e) return;
+  neSync();
+  const body = neBody(), title = e.title.trim(), was = e.was, now = neState();
+  NE = null;
+  if (now === was || (e.isNew && !title && !body.trim())) {
+    // Nothing changed here, but what is waiting to be saved must stay: it may be the only copy.
+    // Only a draft kept while this note was open is undone, going back to what was waiting before it.
+    if (e.drafted) { if (e.waited) nWaitPut(e.waited); else nWaitDrop(e.id); }
+    if (nWaiting().length) noteFlush(true);
+    return;
+  }
+  if (body.length > NOTE_LIMIT) { toast('⚠️ Too long for one note. Kept on this phone: split it in two.'); }
+  const d = { Title: title, Kind: e.kind, Body: body, Color: e.color, Labels: e.labels.join(', '), Pinned: e.pinned ? 'yes' : '', Due: e.due, Status: e.status, Shared: e.shared ? 'yes' : '', Created: e.created };
+  const msg = e.status === 'bin' ? 'Moved to the bin' : e.status === 'archived' && !/"s":"archived"/.test(was) ? 'Archived' : 'Saved ✓';
+  if (body.length > NOTE_LIMIT) { nWaitPut({ op: 'save', id: e.id, note: d, base: e.base }); if (D) render(); return; }
+  if (!D) { nWaitPut({ op: 'save', id: e.id, note: d, base: e.base }); return; }
+  noteSave(e.id, d, e.base, msg);
+}
+// The phone can close the app at any moment: keep what is being written, without waiting for "Done".
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'hidden' || !NE) return;
+  neSync();
+  const body = neBody(), title = NE.title.trim();
+  if (neState() === NE.was || (NE.isNew && !title && !body.trim())) return;
+  NE.drafted = true;
+  nWaitPut({ op: 'save', id: NE.id, base: NE.base, note: { Title: title, Kind: NE.kind, Body: body, Color: NE.color, Labels: NE.labels.join(', '), Pinned: NE.pinned ? 'yes' : '', Due: NE.due, Status: NE.status, Shared: NE.shared ? 'yes' : '', Created: NE.created } });
+});
+function noteBinModal(n) {
+  const text = n.Kind === 'list' ? nItems(n.Body).map(i => (i.on ? '✓ ' : '• ') + i.t).join('\n') : n.Body;
+  openModal(`<h3>🗑️ ${esc(n.Title) || 'In the bin'}</h3><div class="card small" style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(text) || '<span class="muted">Empty</span>'}</div>
+    <div class="btns"><button class="btn" data-id="${esc(n.Id)}" onclick="closeModal();noteSend({op:'status',id:this.dataset.id,status:''},'Put back ✓')">Put back</button>
+      <button class="btn ghost" data-id="${esc(n.Id)}" onclick="if(confirm('Delete this note for good?')){closeModal();noteSend({op:'delete',id:this.dataset.id},'Deleted')}">Delete for good</button></div>`);
+}
+// Text shared from another app, with no link in it, becomes a note.
+function sharedNote(text, url, here) {
+  SEG.nv = 'all';
+  if (!here) go('notes');
+  noteOpen(0, { Kind: 'note', Title: url ? String(text).replace(url, '').replace(/\s+/g, ' ').trim().slice(0, 160) : '', Body: url || String(text), _dirty: true });
+}
+
+// ---------- WISHLIST (inside Me): new wants wait a little before you decide ----------
 // A short wait lowers the urge to buy on impulse (desire cools with distance in time: Hoch & Loewenstein 1991;
 // a 25-hour delay lowered the urge and purchase intent in Moser 2020). The waits are yours to change in the list's ⚙️.
 const wishWait = price => +price >= (+D.settings.WishBigAmount || 500) ? (+D.settings.WishBigWait || 14) : (+D.settings.WishWait || 2);
@@ -2345,12 +2966,6 @@ const wishes = () => D.wishlist || [];
 const isWaiting = w => !w.Status || w.Status === 'waiting';
 const isReady = w => isWaiting(w) && (!w.WaitUntil || days(w.WaitUntil) <= 0);
 const plusDays = n => { const d = new Date(todayISO() + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
-function wishSummary() {
-  const r = wishes().filter(isReady).length, w = wishes().filter(x => isWaiting(x) && !isReady(x)).length;
-  return `<div class="row" onclick="go('money','wish')"><span class="emo">🛍️</span><div class="grow"><b>Wishlist</b>
-    <div class="muted small">${r || w ? [r ? r + ' ready to decide' : '', w ? w + ' waiting' : ''].filter(Boolean).join(' · ') : 'Want something? Let it wait here first.'}</div></div>
-    ${r ? '<span class="pill p-warn">' + r + '</span>' : '<span class="muted">›</span>'}</div>`;
-}
 function wishCard(w) {
   const ready = isReady(w), left = w.WaitUntil ? days(w.WaitUntil) : 0, total = Math.max(1, w.Added && w.WaitUntil ? days(w.WaitUntil) - days(w.Added) : 1);
   const pic = w.Image ? `<img class="wpic" src="${esc(w.Image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="wpic">🛍️</span>';
@@ -2370,9 +2985,7 @@ function viewWish() {
   const thisYear = done.filter(w => String(w.Decided).startsWith(year));
   const kept = sum(thisYear.filter(w => w.Status === 'dropped'), w => w.Price), bought = sum(thisYear.filter(w => w.Status === 'bought'), w => w.Price);
   const s = D.settings;
-  return `<button class="back" onclick="go('money')">← Money</button>
-    <h1>Wishlist</h1>
-    <p class="muted">New wants wait ${+s.WishWait || 2} days, or ${+s.WishBigWait || 14} days from ${lei(+s.WishBigAmount || 500)}. Most urges fade in a day or two; what is left is a real want.</p>
+  return `<p class="muted">New wants wait ${+s.WishWait || 2} days, or ${+s.WishBigWait || 14} days from ${lei(+s.WishBigAmount || 500)}. Most urges fade in a day or two; what is left is a real want.</p>
     <div class="btns"><button class="btn" onclick="wishModal(0)">+ Add something</button>${D.role === 'owner' ? '<button class="btn ghost" style="flex:none" onclick="wishRulesModal()" aria-label="Waiting rules">⚙️</button>' : ''}</div>
     <p class="muted small">Tip: in a shop's app or browser tap <b>Share → SelfMate</b> (needs the 🌱 home-screen app), or paste the link here.</p>
     ${ready.length ? `<h2>Ready to decide (${ready.length})</h2>${ready.map(wishCard).join('')}` : ''}
@@ -2402,7 +3015,8 @@ function wishModal(row, pre) {
     ${isWaiting(w) ? `<label>Wait (days from today)</label><input id="ww" type="number" inputmode="numeric" value="${wait}">` : ''}
     ${row ? `<label>Status</label><select id="wst">${[['waiting', 'Still waiting / deciding'], ['bought', 'Bought'], ['dropped', 'Let go']].map(o => `<option value="${o[0]}" ${o[0] === (w.Status || 'waiting') ? 'selected' : ''}>${o[1]}</option>`).join('')}</select>` : ''}
     <div class="btns"><button class="btn" onclick="saveWish(${row || 0})">${row ? 'Save' : 'Let it wait 🌱'}</button>
-      ${row ? `<button class="btn ghost" onclick="if(confirm('Remove this from the wishlist?'))act('deleteRow',{tab:'Wishlist',row:${row}},'Removed')">Remove</button>` : ''}</div>`);
+      ${row ? `<button class="btn ghost" onclick="if(confirm('Remove this from the wishlist?'))act('deleteRow',{tab:'Wishlist',row:${row}},'Removed')">Remove</button>` : ''}</div>
+    ${w._shared ? `<div class="btns"><button class="btn ghost" onclick="swapShared('recipes')">🍳 It's a recipe</button><button class="btn ghost" onclick="swapShared('note')">📝 It's a note</button></div>` : ''}`);
   if (!row && w.Link && !w.Price) fillFromLink();
 }
 async function fillFromLink() {
@@ -2463,15 +3077,171 @@ async function saveWishRules() {
   for (const p of pairs) await call('setSetting', { key: p[0], value: p[1] });
   toast('Saved ✓'); await load();
 }
-// Text shared from another app ("Rain jacket https://shop.ro/...") → a filled-in wish
-function sharedWish(text) {
+// Text shared from another app ("Rain jacket https://shop.ro/...") → a filled-in recipe or wish, going by the site.
+// One tap in the form switches to the other, in case the guess is wrong.
+let SHARED = null;
+const RECIPE_SITES = /^https?:\/\/([a-z0-9-]+\.)*(youtube\.com|youtu\.be|instagram\.com|facebook\.com|fb\.com|fb\.watch|tiktok\.com|pinterest\.[a-z.]+|pin\.it)(\/|$)/i;
+function sharedLink(text) {
   const url = (String(text).match(/https?:\/\/[^\s"'<>]+/) || [''])[0];
   const name = String(text).replace(url, '').replace(/\s+/g, ' ').replace(/^["'«“]|["'»”]$/g, '').trim().slice(0, 160);
-  go('money', 'wish');
-  wishModal(0, { Link: url, Item: name });
+  SHARED = { url, name };
+  if (!url) return sharedNote(String(text).trim());   // no link in it: an idea, a list, a piece of text
+  const to = RECIPE_SITES.test(url) ? 'recipes' : 'wish';
+  SEG.me = to; go('me');
+  openShared(to);
+}
+function openShared(to) {
+  if (to === 'recipes') recipeModal(0, { Link: SHARED.url, Recipe: SHARED.name, _shared: true });
+  else wishModal(0, { Link: SHARED.url, Item: SHARED.name, _shared: true });
+}
+function swapShared(to) {
+  if (to === 'note') { SEG.nv = 'all'; TAB = 'notes'; SUB = null; render(); return sharedNote((SHARED.name + ' ' + SHARED.url).trim(), SHARED.url, true); }
+  SEG.me = to; render(); openShared(to);
 }
 
-// ---------- ME: mood & energy, health (personal: only you ever see yours) ----------
+// ---------- RECIPES (inside Me): ideas to try later, one list shared by both of you ----------
+const recipes = () => D.recipes || [];
+const splitCats = s => String(s == null ? '' : s).split(',').map(x => x.trim()).filter(Boolean);
+const recCats = () => splitCats(D.settings.RecipeCategories === undefined ? 'Breakfast, Lunch, Sweets, High protein, Charcuterie' : D.settings.RecipeCategories);
+const recSource = link => {
+  const host = String(link || '').replace(/^https?:\/\/(www\.|m\.)?/i, '').split(/[/?#]/)[0].toLowerCase();
+  const known = [[/youtu/, 'YouTube'], [/instagram/, 'Instagram'], [/^(facebook|fb)\./, 'Facebook'], [/tiktok/, 'TikTok'], [/^(pinterest|pin\.it)/, 'Pinterest']];
+  const hit = known.find(k => k[0].test(host));
+  return hit ? hit[1] : host;
+};
+function recipeCard(r) {
+  const tried = r.Status === 'tried', link = /^https?:\/\//i.test(r.Link || '') ? r.Link : '';
+  const pic = r.Image ? `<img class="wpic" src="${esc(r.Image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML='<span class=&quot;wpic&quot;>🍳</span>'">` : '<span class="wpic">🍳</span>';
+  return `<div class="card wish recipe ${tried ? 'tried' : ''}"><div class="wtop" onclick="recipeModal(${r._row})">${pic}
+      <div class="grow"><b>${esc(r.Recipe)}</b><div class="muted small">${esc(splitCats(r.Categories).join(' · ')) || 'No category'}</div>
+      ${r.Notes ? `<div class="small">${esc(r.Notes)}</div>` : ''}${tried && r.TriedOn ? `<div class="muted small">Tried ${fmt(r.TriedOn)}</div>` : ''}</div></div>
+    <div class="acts">${link ? `<a class="small" href="${esc(link)}" target="_blank" rel="noopener">Open on ${esc(recSource(link))} ↗</a>` : '<span></span>'}
+      ${tried ? '' : `<button class="chip" onclick="triedModal(${r._row})">✓ Tried it</button>`}</div></div>`;
+}
+function viewRecipes() {
+  const all = recipes(), cats = recCats(), none = all.filter(r => !splitCats(r.Categories).length).length;
+  if (SEG.recipe && SEG.recipe !== '-' && !cats.includes(SEG.recipe)) SEG.recipe = '';
+  const f = SEG.recipe || '', hit = r => !f || (f === '-' ? !splitCats(r.Categories).length : splitCats(r.Categories).includes(f));
+  const newest = (a, b) => String(a.Added) < String(b.Added) ? 1 : String(a.Added) > String(b.Added) ? -1 : b._row - a._row;
+  const list = all.filter(hit).sort(newest), toTry = list.filter(r => r.Status !== 'tried'), tried = list.filter(r => r.Status === 'tried');
+  const n = c => all.filter(r => splitCats(r.Categories).includes(c)).length;
+  const chip = (on, i, label, count) => `<button class="chip ${on ? 'on' : ''}" onclick="recFilter(${i})">${esc(label)}${count ? ' · ' + count : ''}</button>`;
+  return `<div class="btns"><button class="btn" onclick="recipeModal(0)">+ Add a recipe</button><button class="btn ghost" style="flex:none" onclick="recipeCatsModal()" aria-label="Categories">⚙️</button></div>
+    <p class="muted small">Tip: in YouTube, Instagram or Facebook tap <b>Share → SelfMate</b> (needs the 🌱 home-screen app), or paste the link here.</p>
+    <div class="chips">${chip(!f, -1, 'All', all.length)}${cats.map((c, i) => chip(f === c, i, c, n(c))).join('')}${none ? chip(f === '-', -2, 'No category', none) : ''}</div>
+    ${toTry.length ? `<h2>To try (${toTry.length})</h2>${toTry.map(recipeCard).join('')}` : ''}
+    ${tried.length ? `<h2>Tried (${tried.length})</h2>${tried.map(recipeCard).join('')}` : ''}
+    ${list.length ? '' : `<p class="muted">${f ? 'Nothing here yet.' : 'No recipes yet. 🌿'}</p>`}`;
+}
+function recFilter(i) { SEG.recipe = i === -1 ? '' : i === -2 ? '-' : recCats()[i]; render(); }
+
+let RIMG = '', RPICK = [], RLIST = [];   // while the form is open: its picture, chosen categories, and the categories on offer
+const recChips = () => RLIST.map((c, i) => `<button class="chip ${RPICK.includes(c) ? 'on' : ''}" onclick="recPick(${i})">${esc(c)}</button>`).join('');
+function recPick(i) {
+  const c = RLIST[i];
+  RPICK = RPICK.includes(c) ? RPICK.filter(x => x !== c) : RPICK.concat(c);
+  $('#rcats').innerHTML = recChips();
+}
+const recPicHtml = () => RIMG ? `<img class="wbig" src="${esc(RIMG)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : '';
+function recipeModal(row, pre) {
+  const r = row ? recipes().find(x => x._row === row) : Object.assign({}, pre || {});
+  if (!r) return;
+  RIMG = r.Image || '';
+  RPICK = splitCats(r.Categories);
+  if (!row && !pre && SEG.recipe && SEG.recipe !== '-') RPICK = [SEG.recipe];   // adding while looking at a category
+  RLIST = recCats().concat(RPICK.filter(c => !recCats().includes(c)));
+  openModal(`<h3>${row ? 'Edit recipe' : 'Add a recipe'}</h3>
+    <div id="rpv">${recPicHtml()}</div>
+    <label>Link (optional)</label><div class="inline"><input id="rl" type="url" inputmode="url" value="${esc(r.Link)}" placeholder="https://…">
+      <button class="btn ghost" id="rfill" onclick="fillRecipe()">Fill in</button></div>
+    <label>What is it</label><input id="rn" value="${esc(r.Recipe)}" placeholder="e.g. Protein pancakes">
+    <label>Categories (as many as fit)</label><div class="chips" id="rcats">${recChips()}</div>
+    <label>New category (optional)</label><input id="rnew" placeholder="e.g. Soups">
+    <label>Note (optional)</label><input id="rnote" value="${esc(r.Notes)}">
+    ${row ? `<label>Status</label><select id="rst"><option value="">To try</option><option value="tried" ${r.Status === 'tried' ? 'selected' : ''}>Tried</option></select>` : ''}
+    <div class="btns"><button class="btn" id="rsave" onclick="saveRecipe(${row || 0})">Save</button>
+      ${row ? `<button class="btn ghost" onclick="removeRecipe(${row})">Remove</button>` : ''}</div>
+    ${r._shared ? `<div class="btns"><button class="btn ghost" onclick="swapShared('wish')">🛍️ It's something to buy</button><button class="btn ghost" onclick="swapShared('note')">📝 It's a note</button></div>` : ''}`);
+  if (!row && r.Link) fillRecipe();
+}
+async function fillRecipe() {
+  const url = val('rl'), btn = $('#rfill');
+  if (!url) return toast('Paste a link first');
+  if (btn) { btn.disabled = true; btn.textContent = 'Reading…'; }
+  const r = await call('peek', { url }).catch(() => null);
+  if (btn) { btn.disabled = false; btn.textContent = 'Fill in'; }
+  if (!r || !$('#rn')) return;
+  // Instagram and Facebook answer outside readers with a sign-in page, so their "title" is not the recipe's name.
+  const junk = /^(instagram|facebook|youtube|tiktok|pinterest)$|^(log ?in|sign ?in|error|page not found)\b|log ?in (to|or|into)\b/i;
+  const title = r.title && !junk.test(r.title) ? r.title : '';
+  if (title && (!val('rn') || val('rn').length < 4 || /https?:/.test(val('rn')))) $('#rn').value = title;
+  // Pictures from these two come with a link that stops working after a while, so they aren't kept.
+  if (r.image && !/cdninstagram|fbcdn/i.test(r.image)) { RIMG = r.image; $('#rpv').innerHTML = recPicHtml(); }
+  if (!title && !val('rn')) toast(recSource(url) + ' did not say the name. Type a few words, or just save.');
+}
+async function saveRecipe(row) {
+  const link = val('rl');
+  const typed = splitCats(val('rnew')), fresh = typed.filter(c => !recCats().includes(c));
+  const picked = RPICK.concat(typed.filter(c => !RPICK.includes(c)));
+  const v = { Recipe: val('rn') || (link ? 'Idea from ' + recSource(link) : ''), Link: link, Image: RIMG, Categories: picked.join(', '), Notes: val('rnote') };
+  if (!v.Recipe) return toast('What is it?');
+  if (!row && link && recipes().some(r => r.Link === link)) return toast('⚠️ This link is already in your recipes');
+  if (fresh.length) {   // the new category first, so the reload after saving already knows it
+    const btn = $('#rsave'); if (btn) btn.disabled = true;
+    const list = recCats().concat(fresh).join(', ');
+    const ok = await call('setSetting', { key: 'RecipeCategories', value: list }).then(() => true).catch(() => false);
+    if (btn) btn.disabled = false;
+    if (!ok) return;
+    D.settings.RecipeCategories = list;
+  }
+  if (!row) return add('Recipes', Object.assign(v, { Added: todayISO(), Status: '' }), 'Saved for later 🍳');
+  v.Status = val('rst');
+  const old = recipes().find(x => x._row === row);
+  v.TriedOn = v.Status === 'tried' ? (old && old.TriedOn) || todayISO() : '';
+  upd('Recipes', row, v, 'Saved ✓');
+}
+function removeRecipe(row) { if (confirm('Remove this recipe for both of you?')) act('deleteRow', { tab: 'Recipes', row }, 'Removed'); }
+function triedModal(row) {
+  const r = recipes().find(x => x._row === row);
+  if (!r) return;
+  openModal(`<h3>✓ ${esc(r.Recipe)}</h3>
+    <label>How was it? (optional)</label><input id="rtn" value="${esc(r.Notes)}" placeholder="e.g. Good, less sugar next time">
+    <div class="btns"><button class="btn" onclick="upd('Recipes',${row},{Status:'tried',TriedOn:todayISO(),Notes:val('rtn')},'Marked as tried ✓')">Save</button></div>`);
+}
+function recipeCatsModal() {
+  const cats = recCats(), n = c => recipes().filter(r => splitCats(r.Categories).includes(c)).length;
+  openModal(`<h3>Recipe categories</h3>
+    ${cats.map((c, i) => `<div class="row" onclick="recCatModal(${i})"><div class="grow">${esc(c)}</div><span class="muted small">${n(c)}</span></div>`).join('') || '<p class="muted">No categories yet.</p>'}
+    <label>Add a category</label><div class="inline"><input id="rca" placeholder="e.g. Soups"><button class="btn ghost" onclick="addRecCat()">Add</button></div>
+    <p class="muted small">Tap one to rename or remove it. You share these with ${D.role === 'owner' ? 'your partner' : 'the owner'}.</p>`);
+}
+function addRecCat() {
+  const fresh = splitCats(val('rca')).filter(c => !recCats().includes(c));
+  if (!fresh.length) return toast(val('rca') ? 'You already have that one' : 'Type a name first');
+  const value = recCats().concat(fresh).join(', ');
+  D.settings.RecipeCategories = value;
+  act('setSetting', { key: 'RecipeCategories', value }, 'Added ✓');
+}
+function recCatModal(i) {
+  const c = recCats()[i];
+  openModal(`<h3>${esc(c)}</h3><label>Name</label><input id="rcn" value="${esc(c)}">
+    <div class="btns"><button class="btn" onclick="renameRecCat(${i})">Save</button><button class="btn ghost" onclick="removeRecCat(${i})">Remove</button></div>`);
+}
+function renameRecCat(i) {
+  const from = recCats()[i], to = val('rcn').replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!to) return toast('Give it a name');
+  if (to === from) return closeModal();
+  if (recCats().includes(to)) return toast('You already have that one');
+  if (SEG.recipe === from) SEG.recipe = to;
+  act('recipeCategory', { from, to }, 'Renamed ✓');
+}
+function removeRecCat(i) {
+  const from = recCats()[i], n = recipes().filter(r => splitCats(r.Categories).includes(from)).length;
+  if (!confirm(n ? `Remove "${from}"? Its ${n} recipe${n === 1 ? '' : 's'} stay, just without this category.` : `Remove "${from}"?`)) return;
+  act('recipeCategory', { from, to: '' }, 'Removed');
+}
+
+// ---------- ME: mood & energy, health, wishlist (personal: only you ever see yours) ----------
 const MOODS = [['😣', 'Very low'], ['😕', 'Low'], ['😐', 'Okay'], ['🙂', 'Good'], ['😄', 'Great']];
 const ENERGY = [['😴', 'Drained'], ['🥱', 'Low'], ['🙂', 'Okay'], ['💪', 'Good'], ['⚡', 'Full']];
 const mk = k => (D.role === 'owner' ? '' : 'Partner') + k;   // my own setting's name (MoodTime / PartnerMoodTime)
@@ -2484,12 +3254,12 @@ const num1s = n => (Math.round(n * 10) / 10).toLocaleString('en-GB');
 const isoBack = n => plusDays(-n);
 
 function viewMe() {
-  const seg = SEG.me || 'mood';
+  const seg = SEG.me || 'mood', ready = wishes().filter(isReady).length;
   return `<div class="label">${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
-    <h1>How you're doing</h1>
-    <div class="seg">${[['mood', '🌙 Mood & energy'], ['health', '🩺 Health']].map(x => `<button class="${x[0] === seg ? 'on' : ''}" onclick="SEG.me='${x[0]}';render()">${x[1]}</button>`).join('')}</div>
-    ${seg === 'mood' ? viewMood() : viewHealth()}
-    <p class="muted small" style="margin-top:24px">🔒 Only you see this page. It is never shown to ${D.role === 'owner' ? 'your partner' : 'the owner'}, not even while sharing.</p>`;
+    <h1>${seg === 'wish' ? 'Wishlist' : seg === 'recipes' ? 'Recipes' : "How you're doing"}</h1>
+    <div class="seg tight">${[['mood', '🌙 Mood'], ['health', '🩺 Health'], ['wish', '🛍️ Wishes' + (ready ? ' · ' + ready : '')], ['recipes', '🍳 Recipes']].map(x => `<button class="${x[0] === seg ? 'on' : ''}" onclick="SEG.me='${x[0]}';render()">${x[1]}</button>`).join('')}</div>
+    ${seg === 'wish' ? viewWish() : seg === 'recipes' ? viewRecipes() : seg === 'mood' ? viewMood() : viewHealth()}
+    <p class="muted small" style="margin-top:24px">${seg === 'recipes' ? `🤝 You share this list with ${D.role === 'owner' ? 'your partner' : 'the owner'}.` : `🔒 Only you see this page. It is never shown to ${D.role === 'owner' ? 'your partner' : 'the owner'}, not even while sharing.`}</p>`;
 }
 
 // One quick evening rating: mood and energy (the two main dimensions of how we feel, Russell 1980 / the Affect Grid,
@@ -2534,6 +3304,8 @@ function rateModal(day) {
       <div class="serif" style="font-size:22px">How was your day?</div></div>
     <label>Mood</label>${scale('Mood', MOODS)}
     <label>Energy</label>${scale('Energy', ENERGY)}
+    ${D.role === 'owner' ? `<label>Roughly how much did you spend ${day === todayISO() ? 'today' : 'that day'}? (lei, optional, 0 is fine)</label>
+    <input id="rs" type="number" inputmode="decimal" min="0" value="${m && m.SpentEstimate !== '' && m.SpentEstimate != null ? +m.SpentEstimate : ''}" placeholder="A guess is enough. Your bank import corrects it.">` : ''}
     <label>Sleep last night (0 = terrible, 10 = excellent)</label>
     <div class="sleep" id="sc_Sleep">${Array.from({ length: 11 }, (_, i) => `<button class="${RATE.Sleep === i ? 'on' : ''}" onclick="RATE.Sleep=RATE.Sleep===${i}?'':${i};markSleep()">${i}</button>`).join('')}</div>
     <label>What was part of today? (optional)</label>
@@ -2546,8 +3318,8 @@ function markScale(key) { document.querySelectorAll('#sc_' + key + ' .sc').forEa
 function markSleep() { document.querySelectorAll('#sc_Sleep button').forEach((b, i) => b.classList.toggle('on', RATE.Sleep === i)); }
 async function saveRating() {
   if (!RATE.Mood || !RATE.Energy) return toast('Pick your mood and your energy');
-  const r = RATE, first = !moodOn(r.day);
-  await act('rate', { values: { Date: r.day, Mood: r.Mood, Energy: r.Energy, Sleep: r.Sleep, Tags: [...r.tags].join(', '), Note: val('rn') } }, first ? 'Saved. Sleep well 🌙' : 'Updated ✓');
+  const r = RATE, first = !moodOn(r.day), spent = val('rs');
+  await act('rate', { values: { Date: r.day, Mood: r.Mood, Energy: r.Energy, Sleep: r.Sleep, Tags: [...r.tags].join(', '), Note: val('rn'), SpentEstimate: spent === '' ? '' : Math.max(0, +spent || 0) } }, first ? 'Saved. Sleep well 🌙' : 'Updated ✓');
   RATE = null;
 }
 // Gentle note after two weeks of mostly low days ("more than half the days", as in the PHQ-2 screening questions).
@@ -2643,6 +3415,7 @@ function moodSettingsModal() {
     <label>Things to tick (comma separated)</label><input id="mtg" value="${esc(moodTags().join(', '))}">
     <div class="btns"><button class="btn" onclick="saveMoodSettings()">Save</button></div>
     <h2>This phone</h2>
+    ${pushLastText(p.last)}
     ${START.home ? `<p class="muted small">${PUSHHERE ? '✓ This phone gets the reminder.' : 'Allow notifications when your phone asks.'}</p>
       <div class="btns">${PUSHHERE ? '<button class="btn ghost" onclick="pushBridge(\'push-off\')">Turn off here</button>' : '<button class="btn" onclick="pushBridge(\'push-on\')">Turn on notifications</button>'}
       ${p.devices ? '<button class="btn ghost" onclick="pushTest(this)">Send a test</button>' : ''}</div>`
@@ -2651,6 +3424,11 @@ function moodSettingsModal() {
     <h2>Evening lines (${(D.lines || []).length})</h2>
     <p class="muted small">One a day in the notification and on this page. Add your own, change or delete any.</p>
     <button class="btn ghost wide" onclick="linesModal()">See and edit the lines</button>`);
+}
+function pushLastText(l) {
+  if (!l) return '';
+  const when = new Date(l.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), what = l.why === 'evening' ? 'reminder' : 'test';
+  return `<p class="muted small">${l.ok ? `Last ${what}: ${when}, sent to your phone. If it never appeared, your phone held it back: check its battery settings for SelfMate and Chrome.` : `Last ${what}: ${when}, not sent${l.error ? ' (' + esc(l.error) + ')' : l.codes && l.codes.length ? ' (code ' + esc(l.codes.join(', ')) + ')' : ''}. SelfMate tries again in 15 minutes.`}</p>`;
 }
 async function saveMoodSettings() {
   const pairs = [[mk('MoodTime'), val('mt') || '21:00'], [mk('MoodPush'), $('#mon').checked ? 'on' : 'off'], [mk('MoodTags'), val('mtg')]];
@@ -2814,10 +3592,10 @@ function handleStart() {
   // The lines go along so that a notification still has tonight's line if the phone can't reach SelfMate at that moment.
   if (START.home && window.top !== window) window.top.postMessage({ selfmate: 'hello', offset: D.role === 'owner' ? 0 : 7, lines: (D.lines || []).map(x => String(x.Line || '').trim().slice(0, 300)).filter(Boolean).slice(0, 100) }, '*');
   if (START.open === 'mood') { SEG.me = 'mood'; go('me'); rateModal(todayISO()); }
-  else if (START.wish) sharedWish(START.wish);
+  else if (START.wish) sharedLink(START.wish);
 }
 
-const VIEWS = { home: viewHome, dates: viewDates, money: viewMoney, trips: viewTrips, projects: viewProjects, me: viewMe, srl: viewSrl };
+const VIEWS = { home: viewHome, dates: viewDates, notes: viewNotes, money: viewMoney, trips: viewTrips, projects: viewProjects, me: viewMe, srl: viewSrl };
 
 // ---------- Preview mode (only used when opened outside Google, e.g. on a computer for testing) ----------
 const MOCK = (() => {
@@ -2899,11 +3677,23 @@ const MOCK = (() => {
       { _row: 6, Date: off(-9), Project: 'Sourdough baking', Type: 'Session', Hours: 2, Count: 2, Cost: 20, Note: 'Open crumb at last!', Photo: 'm3', Thumb: 'm3' },
       { _row: 7, Date: off(-20), Project: 'Biking', Type: 'Session', Hours: 2, Km: 42, Note: 'Făget loop' },
       { _row: 8, Date: off(-3), Project: 'Biking', Type: 'Session', Hours: 1.5, Km: 30, Cost: 120, Note: 'New tyres' }],
+    notes: [
+      { Id: 'mock1', Title: 'Shopping', Kind: 'list', Body: '[ ] Milk\n[ ] Eggs\n[ ] Bread\n[ ] Tomatoes\n[x] Coffee\n[x] Olive oil', Color: 'butter', Labels: 'Shopping', Pinned: 'yes', Shared: 'yes', Owner: 'owner', Created: 6, Changed: 6 },
+      { Id: 'mock2', Title: 'App ideas', Kind: 'note', Body: 'A plant that grows with the habit.\nLook at https:' + '/' + '/example.com/some/very/long/article/about-habits later.', Color: 'sky', Labels: 'Ideas', Owner: 'owner', Created: 5, Changed: 5 },
+      { Id: 'mock3', Title: 'Before the trip', Kind: 'list', Body: '[ ] Renew the passport\n[ ] Book the car service\n[x] Find the charger', Color: 'leaf', Labels: 'To do', Due: off(1), Owner: 'owner', Created: 4, Changed: 4 },
+      { Id: 'mock4', Title: '', Kind: 'note', Body: 'Call the plumber about the kitchen tap', Color: '', Labels: 'To do', Due: off(-1), Owner: 'owner', Created: 3, Changed: 3 },
+      { Id: 'mock5', Title: 'Books to read', Kind: 'note', Body: 'Atomic Habits\nThe Psychology of Money', Color: 'lilac', Labels: 'Ideas', Owner: 'owner', Created: 2, Changed: 2 },
+      { Id: 'mock6', Title: 'Old packing list', Kind: 'list', Body: '[x] Tent', Status: 'archived', Owner: 'owner', Created: 1, Changed: 1 }],
     wishlist: [
       { _row: 2, Item: 'Rain jacket', Price: 349, Shop: 'Decathlon', Added: off(-3), WaitUntil: off(-1), Status: 'waiting', Link: '#' },
       { _row: 3, Item: 'Espresso machine', Price: 1299, Shop: 'eMAG', Added: off(-4), WaitUntil: off(10), Status: 'waiting' },
       { _row: 4, Item: 'Wireless earbuds', Price: 420, Shop: 'Altex', Added: off(-30), WaitUntil: off(-28), Status: 'dropped', Decided: off(-27) },
       { _row: 5, Item: 'Hiking boots', Price: 610, Shop: 'Decathlon', Added: off(-50), WaitUntil: off(-36), Status: 'bought', Decided: off(-35) }],
+    // The links are split because Google's page builder cuts a line at a // inside a plain text.
+    recipes: [
+      { _row: 2, Recipe: 'Protein pancakes', Link: 'https:/' + '/www.youtube.com/watch?v=abc', Categories: 'Breakfast, High protein', Added: off(-2) },
+      { _row: 3, Recipe: 'Idea from Instagram', Link: 'https:/' + '/www.instagram.com/reel/abc/', Added: off(-1) },
+      { _row: 4, Recipe: 'Lemon tart', Link: 'https:/' + '/www.facebook.com/watch/?v=1', Categories: 'Sweets', Status: 'tried', TriedOn: off(-6), Notes: 'Good, less sugar next time', Added: off(-20) }],
     mood: Array.from({ length: 80 }, (_, i) => { const day = off(-i - 1), r = k => Math.abs(Math.sin((i + 3) * 7.13 + k)) ;
       if (r(9) < 0.12) return null;
       const sleep = Math.round(4 + r(1) * 6), ex = r(2) > 0.6, mood = Math.max(1, Math.min(5, Math.round(sleep * 0.35 + (ex ? 0.7 : 0) + r(3) * 1.8 - 0.6)));
@@ -2946,12 +3736,15 @@ const MOCK = (() => {
     if (action === 'answer') db.transactions.forEach(x => { if (x._row === d.row) x.Category = d.category; });
     if (action === 'setSetting') db.settings[d.key] = d.value;
     if (action === 'deleteRow') { const k = tabKey(d.tab); db[k] = db[k].filter(r => r._row !== d.row); }
+    if (action === 'recipeCategory') { const swap = x => String(x || '').split(',').map(c => c.trim()).filter(Boolean).map(c => c === d.from ? d.to : c).filter(Boolean).join(', ');
+      db.settings.RecipeCategories = swap(db.settings.RecipeCategories === undefined ? 'Breakfast, Lunch, Sweets, High protein, Charcuterie' : db.settings.RecipeCategories); db.recipes.forEach(r => { r.Categories = swap(r.Categories); }); }
     if (action === 'renameCategory') { db.categories.forEach(c => { if (c.Category === d.from) c.Category = d.to; }); db.transactions.forEach(t => { if (t.Category === d.from) t.Category = d.to; }); }
     if (action === 'checkin') { const h = db.habit; if (!(h.last >= mondayISO())) h.n++; h.last = t; if (d.plan !== undefined) h.plan = d.plan; return Object.assign({}, h); }
     if (action === 'import') return { added: 0, skipped: 0, unsorted: 0 };
     if (action === 'peek') return { url: d.url, title: 'Waterproof hiking jacket, men', price: 79.9, currency: 'EUR', shop: 'Example Shop', image: '' };
     if (action === 'pushTest') return { sent: 0, devices: 0 };
     if (action === 'pushReg') return d.what === 'key' ? { key: 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U' } : { ok: true, devices: 1 };
+    if (action === 'note') { db.notes = noteApply(db.notes || [], d, db.role); return { Changed: Date.now() }; }
     if (action === 'rate') { const v = Object.assign({ Owner: 'owner' }, d.values), r = db.mood.find(x => x.Date === v.Date);
       if (r) { Object.assign(r, v); return r._row; } v._row = row++; db.mood.push(v); return v._row; }
     if (action === 'tagTrip') db.transactions.forEach(x => { if ((d.add || []).includes(x._row)) x.Trip = d.trip; if ((d.remove || []).includes(x._row) && x.Trip === d.trip) x.Trip = ''; });

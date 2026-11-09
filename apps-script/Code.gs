@@ -48,8 +48,10 @@ const TABS = {
   Balances:     ['Name', 'Emoji', 'Amount', 'Currency', 'Kind', 'Updated'],
   // Things you want to buy: each waits until WaitUntil before you decide. Status: waiting | bought | dropped. Personal.
   Wishlist:     ['Item', 'Price', 'Link', 'Shop', 'Image', 'Added', 'WaitUntil', 'Status', 'Decided', 'Notes', 'Owner'],
+  // Recipe ideas to try, shared by both of you. Categories = comma separated (names come from the RecipeCategories setting). Status: empty = to try | tried.
+  Recipes:      ['Recipe', 'Link', 'Image', 'Categories', 'Status', 'Added', 'TriedOn', 'Notes'],
   // One evening rating per person per day. Mood and Energy 1–5, Sleep 0–10 (last night), Tags comma separated. Personal.
-  Mood:         ['Date', 'Mood', 'Energy', 'Sleep', 'Tags', 'Note', 'Owner'],
+  Mood:         ['Date', 'Mood', 'Energy', 'Sleep', 'Tags', 'Note', 'Owner', 'SpentEstimate'],
   // Health (personal, never shared). PerDay = pills a day, Stock = pills left on StockDate. Active: empty = yes, "no" = stopped.
   Medicines:    ['Name', 'Dose', 'When', 'PerDay', 'Stock', 'StockDate', 'Active', 'Notes', 'Owner'],
   // One measurement: Kind (Weight, Blood pressure…), Value (+ Value2 for a second number, e.g. the lower blood pressure), Unit.
@@ -58,6 +60,10 @@ const TABS = {
   HealthLog:    ['Date', 'Type', 'Title', 'Doctor', 'Notes', 'Owner'],
   // Lines for the evening notification (one a day, in turn). Shared by both of you.
   Lines:        ['Line'],
+  // Notes and lists. Id = made by the app, don't change it. Kind: note | list. In a list, Body has one thing per line: "[ ] milk" or "[x] eggs".
+  // Labels comma separated. Pinned / Shared: yes or empty (Shared = the other person sees and edits it too). Status: empty | archived | bin.
+  // Created / Changed: filled in by the app (a time as a number).
+  Notes:        ['Id', 'Title', 'Kind', 'Body', 'Color', 'Labels', 'Pinned', 'Due', 'Status', 'Shared', 'Owner', 'Created', 'Changed'],
 };
 // Home-screen / browser icon (Microsoft Fluent 3D emoji "Seedling", free to use under the MIT licence)
 const ICON_URL = 'https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Seedling/3D/seedling_3d.png';
@@ -65,12 +71,12 @@ const PRIVATE_TABS =['Invoices', 'SrlMonths', 'SrlCosts'];
 const HOBBY_TABS = ['Projects', 'Tasks', 'Items', 'ProjectLog'];   // personal: each row belongs to one person
 const PERSONAL_TABS = HOBBY_TABS.concat(['Countries', 'Wishlist', 'Mood', 'Medicines', 'Measures', 'HealthLog']);
 const OWN_ONLY_TABS = ['Wishlist', 'Mood', 'Medicines', 'Measures', 'HealthLog'];   // never shown to the other person, not even while sharing   // rows with an Owner: each link sees and changes only its own
-const EDITABLE_TABS = ['Dates', 'Transactions', 'Goals', 'Categories', 'Rules', 'Trips', 'TripItems', 'Balances', 'Lines'].concat(PRIVATE_TABS, PERSONAL_TABS);
-const DELETABLE_TABS = ['Goals', 'Balances', 'ProjectLog', 'Countries', 'TripItems', 'Lines'].concat(OWN_ONLY_TABS);   // rows you can remove from the app (everything else: delete in the Sheet)
+const EDITABLE_TABS = ['Dates', 'Transactions', 'Goals', 'Categories', 'Rules', 'Trips', 'TripItems', 'Balances', 'Lines', 'Recipes'].concat(PRIVATE_TABS, PERSONAL_TABS);
+const DELETABLE_TABS = ['Goals', 'Balances', 'ProjectLog', 'Countries', 'TripItems', 'Lines', 'Recipes'].concat(OWN_ONLY_TABS);   // rows you can remove from the app (everything else: delete in the Sheet)
 const BIG_PROJECT_TOOLS = 'time,money,journal,distance,tasks,parts';
-const DATE_COLS = ['Due', 'LastDone', 'Date', 'Started', 'PaidOn', 'Start', 'End', 'Updated', 'Added', 'WaitUntil', 'Decided', 'StockDate'];
-// The partner may change only their own evening-reminder settings.
-const PARTNER_SETTINGS = ['PartnerMoodTime', 'PartnerMoodPush', 'PartnerMoodTags'];
+const DATE_COLS = ['Due', 'LastDone', 'Date', 'Started', 'PaidOn', 'Start', 'End', 'Updated', 'Added', 'WaitUntil', 'Decided', 'StockDate', 'TriedOn'];
+// The partner may change only their own evening-reminder settings and the shared recipe categories.
+const PARTNER_SETTINGS = ['PartnerMoodTime', 'PartnerMoodPush', 'PartnerMoodTags', 'RecipeCategories'];
 // What identifies a row, per tab. Rows are addressed by their Sheet row number, which shifts when a row above is
 // deleted; before changing a row the server checks these columns still match what the phone saw (see rowFor_).
 const ROW_KEYS = {
@@ -79,7 +85,7 @@ const ROW_KEYS = {
   SrlMonths: ['Month'], SrlCosts: ['Date', 'Amount', 'Item'], Projects: ['Project', 'Owner'], Tasks: ['Project', 'Task'],
   Items: ['Project', 'Item'], ProjectLog: ['Date', 'Project', 'Type', 'Note'], Countries: ['Country', 'Owner'],
   Wishlist: ['Item', 'Added'], Mood: ['Date', 'Owner'], Medicines: ['Name', 'Owner'], Measures: ['Date', 'Kind', 'Value'],
-  HealthLog: ['Date', 'Title'], Lines: ['Line'],
+  HealthLog: ['Date', 'Title'], Lines: ['Line'], Recipes: ['Recipe', 'Added'],
 };
 
 // ---------- Starter data (edit freely in the Sheet afterwards) ----------
@@ -219,6 +225,7 @@ function doGet(e) {
   const props = PropertiesService.getScriptProperties();
   if (!props.getProperty('OWNER_KEY')) return firstRun_();
   if (p.check === 'page') return builtPage_();   // after publishing: tools/check-live.js tests that this page's code still runs
+  if (p.check === 'notes') return notesCheck_();   // same: is the Notes tab there and complete (no content, only counts)
   if (p.check === 'push') return pushCheck_();   // same: tests the notification code on Google (no key, no personal data)
   if (p.push) return pushApi_(p);   // the home-screen app's notification requests (Push.gs)
   // The owner opening the plain link (no key) gets their links shown again.
@@ -300,6 +307,7 @@ function ensureTabs_(ss) {
     sh.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight('bold').setBackground('#e8eefc');
     sh.setFrozenRows(1);
     if (name === 'SrlMonths') sh.getRange('A:A').setNumberFormat('@'); // keep "2025-10" as text, not a date
+    if (name === 'Notes') ['A:B', 'D:D', 'F:F'].forEach(a => sh.getRange(a).setNumberFormat('@'));   // what you type stays as typed ("1/2" is not a date)
     const seed = SEED[name] ? SEED[name]() : [];
     if (seed.length) sh.getRange(2, 1, seed.length, head.length).setValues(seed.map(r => pad_(r, head.length)));
     sh.autoResizeColumns(1, head.length);
@@ -318,7 +326,7 @@ function imports_() {
 }
 
 function upgrade_() {
-  if (prop_('SCHEMA') === '9' && imports_().every(h => prop_('IMPORTED_' + h.id))) return;
+  if (prop_('SCHEMA') === '9c' && imports_().every(h => prop_('IMPORTED_' + h.id))) return;
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -357,6 +365,20 @@ function upgrade_() {
     if (prop_('SCHEMA') < '9') {          // v3.0: wishlist, mood & energy, health, evening lines
       ensureTabs_(ss_());
       setProp_('SCHEMA', '9');
+    }
+    // These versions are compared as text, so '10' would sort before '2' and rerun the old steps. '9a' sorts after '9'.
+    if (prop_('SCHEMA') < '9a') {         // v3.1: the evening's rough spending (Mood → SpentEstimate)
+      ensureTabs_(ss_());
+      setProp_('SCHEMA', '9a');
+    }
+    if (prop_('SCHEMA') < '9b') {         // v3.2: recipes, shared by both of you
+      ensureTabs_(ss_());
+      if (settings_().RecipeCategories === undefined) setSetting_('RecipeCategories', 'Breakfast, Lunch, Sweets, High protein, Charcuterie');
+      setProp_('SCHEMA', '9b');
+    }
+    if (prop_('SCHEMA') < '9c') {         // notes and lists
+      ensureTabs_(ss_());
+      setProp_('SCHEMA', '9c');
     }
     imports_().filter(h => !prop_('IMPORTED_' + h.id)).forEach(h => {
       appendRows_('Transactions', h.transactions);
@@ -658,6 +680,7 @@ function api(key, action, data) {
         return true;
       case 'checkin': return checkin_(who, data.plan);
       case 'rate': return rate_(who, data.values || {});
+      case 'note': return note_(who, data);
       case 'deleteRow':
         if (!DELETABLE_TABS.includes(data.tab)) throw new Error('Delete these in the Sheet');
         if (PERSONAL_TABS.includes(data.tab)) checkHobby_(data.tab, who, {}, data.row);
@@ -668,6 +691,7 @@ function api(key, action, data) {
         }
         sheet_(data.tab).deleteRow(data.row);
         return true;
+      case 'recipeCategory': return recipeCategory_(data.from, data.to);
       case 'renameCategory':
         if (who.role !== 'owner') throw new Error('Only the owner can rename categories');
         return renameCategory_(data.from, data.to);
@@ -980,8 +1004,108 @@ function getData_(who) {
   HOBBY_TABS.forEach(t => out[t.toLowerCase()] = visibleHobbyRows_(who, t));
   OWN_ONLY_TABS.forEach(t => out[t.toLowerCase()] = read_(t).filter(r => (r.Owner || 'owner') === who.role));
   out.lines = read_('Lines');
-  out.push = Object.assign({ devices: subsOf_(who.role).length }, moodPrefs_(who.role, s));
+  out.notes = notesFor_(who);
+  out.recipes = read_('Recipes');   // shared: both of you see and change the same list
+  out.push = Object.assign({ devices: subsOf_(who.role).length, last: pushLast_(who.role) }, moodPrefs_(who.role, s));
   return out;
+}
+
+// ---------- Notes and lists ----------
+// Notes are found by their Id, not their row, so they can't be mixed up when rows move. Yours, plus what the other person shares.
+const NOTE_MAX = 45000;   // a Sheet cell holds 50,000 characters
+const noteMine_ = (n, who) => (n.Owner || 'owner') === who.role;
+const noteId_ = n => String(n.Id || 'row' + n._row);   // a row typed into the Sheet by hand has no Id yet
+const noteText_ = v => String(v == null ? '' : v).replace(/^'(?=[=+\-@])/, '');
+function notesFor_(who) {
+  return read_('Notes').filter(n => noteMine_(n, who) || n.Shared === 'yes').map(n => Object.assign(n, {
+    Id: noteId_(n), Title: noteText_(n.Title), Body: noteText_(n.Body), Labels: noteText_(n.Labels), Owner: n.Owner || 'owner',
+    Kind: n.Kind === 'list' ? 'list' : 'note', Created: Number(n.Created) || 0, Changed: Number(n.Changed) || 0,
+  }));
+}
+// A cell starting with one of these would be read as a formula; the apostrophe tells the Sheet it is plain text.
+const noteCell_ = v => /^[=+\-@]/.test(v) ? "'" + v : v;
+function noteLabels_(v) {
+  const seen = {};
+  return String(v || '').split(',').map(x => x.trim().slice(0, 40)).filter(x => x && !seen[x.toLowerCase()] && (seen[x.toLowerCase()] = 1)).join(', ');
+}
+const noteLines_ = body => String(body || '').split('\n').filter(l => l.trim()).map(l => {
+  const m = l.match(/^\s*\[([ xX]?)\]\s?(.*)$/);
+  return m ? { t: m[2], on: !!m[1].trim() } : { t: l.trim(), on: false };
+});
+const noteBody_ = items => items.map(i => (i.on ? '[x] ' : '[ ] ') + i.t).join('\n');
+// Both of you changed the same note: keep both changes. base = what this phone started from, mine = what it wants now, theirs = what the Sheet has.
+function noteMerge_(kind, base, mine, theirs) {
+  base = String(base || ''); mine = String(mine || ''); theirs = String(theirs || '');
+  if (theirs === base || theirs === mine) return mine;
+  if (mine === base) return theirs;
+  if (kind !== 'list') return mine + '\n\n--- also written on the other phone ---\n' + theirs;
+  const key = i => i.t.trim().toLowerCase(), find = (a, i) => a.find(x => key(x) === key(i));
+  const b = noteLines_(base), t = noteLines_(theirs);
+  const out = noteLines_(mine).filter(i => !(find(b, i) && !find(t, i) && find(b, i).on === i.on));   // removed over there, untouched here
+  out.forEach(i => { const was = find(b, i), now = find(t, i); if (was && now && was.on === i.on && now.on !== was.on) i.on = now.on; });   // ticked over there
+  t.filter(i => !find(b, i) && !find(out, i)).forEach(i => out.push(i));   // added over there
+  return noteBody_(out);
+}
+function notesCheck_() {
+  const sh = sheet_('Notes'), have = sh ? sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String) : [];
+  return ContentService.createTextOutput(JSON.stringify({ tab: !!sh, missing: TABS.Notes.filter(h => !have.includes(h)), rows: sh ? Math.max(0, sh.getLastRow() - 1) : 0, schema: prop_('SCHEMA') }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+function note_(who, d) {
+  if (!sheet_('Notes')) ensureTabs_(ss_());   // the tab is normally made when the owner opens the app; the partner may get here first
+  const rows = read_('Notes'), old = d.id ? rows.find(r => noteId_(r) === String(d.id)) : null;
+  if (old && !noteMine_(old, who) && old.Shared !== 'yes') throw new Error('This belongs to someone else');
+  const now = Date.now();
+  if (d.op === 'save') {
+    const v = d.note || {}, id = String(d.id || '');
+    if (!/^[a-z0-9]{4,40}$/i.test(id)) throw new Error('This note has no valid id');
+    const kind = v.Kind === 'list' ? 'list' : 'note';
+    const body = old && d.base && Number(old.Changed) !== Number(d.base.Changed) ? noteMerge_(kind, d.base.Body, v.Body, noteText_(old.Body)) : String(v.Body || '');
+    if (body.length > NOTE_MAX) throw new Error('This note is too long for one Sheet cell. Split it in two.');
+    const row = { Id: id, Title: noteCell_(String(v.Title || '').slice(0, 500)), Kind: kind, Body: noteCell_(body), Color: /^[a-z]{0,12}$/.test(v.Color || '') ? v.Color || '' : '',
+                  Labels: noteCell_(noteLabels_(v.Labels)), Pinned: v.Pinned === 'yes' ? 'yes' : '', Due: /^\d{4}-\d{2}-\d{2}$/.test(v.Due || '') ? v.Due : '', Changed: now };
+    if (!old || noteMine_(old, who)) {   // only the one who wrote it can share, archive or bin it
+      row.Shared = v.Shared === 'yes' ? 'yes' : '';
+      row.Status = ['archived', 'bin'].includes(v.Status) ? v.Status : '';
+    }
+    if (old) { update_('Notes', old._row, row); return { Changed: now, Body: body }; }
+    append_('Notes', Object.assign(row, { Owner: who.role, Created: Number(v.Created) || now }));
+    return { Changed: now, Body: body };
+  }
+  if (d.op === 'renameLabel') {
+    const from = String(d.from || '').trim().toLowerCase(), to = String(d.to || '').replace(/,/g, ' ').trim();
+    rows.filter(n => noteMine_(n, who) || n.Shared === 'yes').forEach(n => {
+      const list = noteText_(n.Labels).split(',').map(x => x.trim()).filter(Boolean);
+      if (list.some(x => x.toLowerCase() === from))
+        update_('Notes', n._row, { Labels: noteCell_(noteLabels_(list.map(x => x.toLowerCase() === from ? to : x).join(','))) });
+    });
+    return true;
+  }
+  if (d.op === 'emptyBin') {
+    rows.filter(n => noteMine_(n, who) && n.Status === 'bin').sort((a, b) => b._row - a._row).forEach(n => sheet_('Notes').deleteRow(n._row));
+    return true;
+  }
+  if (!old) throw new Error('This note is gone. Showing the latest now.');
+  if (d.op === 'tick') {   // only this one line changes, so two phones ticking in the same shop don't undo each other
+    const items = noteLines_(noteText_(old.Body));
+    const same = i => i && i.t === String(d.text);
+    const it = same(items[d.i]) ? items[d.i] : items.find(same);
+    if (!it) return { Changed: Number(old.Changed) || 0 };   // someone else removed it meanwhile
+    it.on = !!d.on;
+    update_('Notes', old._row, { Body: noteCell_(noteBody_(items)), Changed: now });
+    return { Changed: now };
+  }
+  if (!noteMine_(old, who)) throw new Error('Only the one who wrote it can do this');
+  if (d.op === 'status') {
+    update_('Notes', old._row, { Status: ['archived', 'bin'].includes(d.status) ? d.status : '', Changed: now });
+    return { Changed: now };
+  }
+  if (d.op === 'delete') {
+    if (old.Status !== 'bin') throw new Error('Put it in the bin first');
+    sheet_('Notes').deleteRow(old._row);
+    return true;
+  }
+  throw new Error('Unknown note action');
 }
 
 // Link payments to a trip (add) or unlink them (remove). Rows are Sheet row numbers of the Transactions tab.
@@ -1022,11 +1146,26 @@ function rate_(who, v) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day > iso_(new Date())) throw new Error('Pick a day up to today');
   const n15 = x => { const k = Math.round(Number(x)); if (!(k >= 1 && k <= 5)) throw new Error('Choose your mood and energy'); return k; };
   const sleep = v.Sleep === '' || v.Sleep == null ? '' : Math.max(0, Math.min(10, Math.round(Number(v.Sleep)) || 0));
+  const spent = v.SpentEstimate === '' || v.SpentEstimate == null ? '' : Math.max(0, Number(v.SpentEstimate) || 0);
   const row = { Date: day, Mood: n15(v.Mood), Energy: n15(v.Energy), Sleep: sleep, Tags: String(v.Tags || '').slice(0, 300),
-                Note: String(v.Note || '').slice(0, 1000), Owner: who.role };
+                Note: String(v.Note || '').slice(0, 1000), Owner: who.role, SpentEstimate: spent };
   const old = read_('Mood').find(m => m.Date === day && (m.Owner || 'owner') === who.role);
   if (old) { update_('Mood', old._row, row); return old._row; }
   return append_('Mood', row);
+}
+
+// Rename a recipe category (to = the new name) or remove it (to empty), in the list and on every recipe that has it.
+function recipeCategory_(from, to) {
+  from = String(from || '').trim();
+  to = String(to || '').replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+  const split = x => String(x || '').split(',').map(c => c.trim()).filter(Boolean);
+  const list = split(settings_().RecipeCategories);
+  if (to && to !== from && list.includes(to)) throw new Error('That name is already used');
+  const swap = a => a.map(c => c === from ? to : c).filter(Boolean);
+  read_('Recipes').filter(r => split(r.Categories).includes(from))
+    .forEach(r => update_('Recipes', r._row, { Categories: swap(split(r.Categories)).join(', ') }));
+  setSetting_('RecipeCategories', swap(list).join(', '));
+  return true;
 }
 
 // Read a shop's product page for the wishlist: name, price, picture, shop. Works with any shop that publishes the usual
@@ -1035,6 +1174,16 @@ function peek_(url) {
   url = String(url || '').trim();
   if (!/^https?:\/\/[^\s/]+\.[^\s]+$/i.test(url)) throw new Error('That does not look like a web link');
   let r;
+  if (/^https?:\/\/([a-z0-9-]+\.)?(youtube\.com|youtu\.be)\//i.test(url)) {   // YouTube answers this reliably; its page can show a consent screen instead
+    try {
+      r = UrlFetchApp.fetch('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent(url), { muteHttpExceptions: true });
+      if (r.getResponseCode() === 200) {
+        const y = JSON.parse(r.getContentText());
+        return { url: url, title: String(y.title || '').slice(0, 160), price: '', currency: '', shop: 'YouTube',
+                 image: /^https:\/\//.test(y.thumbnail_url || '') ? String(y.thumbnail_url).slice(0, 500) : '' };
+      }
+    } catch (e) { /* fall through to reading the page */ }
+  }
   try {
     r = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true,
       headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Mobile Safari/537.36',
@@ -1090,6 +1239,8 @@ function import_(text, account, person) {
     if (t.Account === acct) { const k = key(t.Date, t.Amount, t.Currency || 'RON'); have[k] = (have[k] || 0) + 1; }
   });
   const rules = rules_();
+  // While the countdown runs (⚙️ Customise, 5 to start with), every new payment waits in ❓ so you check each one yourself.
+  const reviewSet = settings_().ReviewImports, review = reviewSet === undefined || reviewSet === '' ? 5 : Math.max(0, parseInt(reviewSet, 10) || 0);
   const out = [];
   let skipped = 0;
   rows.slice(hi + 1).forEach(r => {
@@ -1109,10 +1260,12 @@ function import_(text, account, person) {
     let cat = categorize_(merchant, rules);
     if (!cat && c.type >= 0 && /top.?up|exchange|transfer/i.test(r[c.type])) cat = 'Transfers';
     if (!cat) cat = amount > 0 ? 'Income' : 'Unsorted';
+    if (review) cat = 'Unsorted';
     out.push({ Date: date, Amount: Math.round(amount * 100) / 100, Currency: currency, Merchant: merchant,
                Category: cat, Account: acct, Source: 'import', Hash: hash, Person: person || 'S' });
   });
   appendRows_('Transactions', out.map(o => TABS.Transactions.map(h => o[h])));
+  if (review && out.length) setSetting_('ReviewImports', review - 1);   // a re-import that adds nothing doesn't use one up
   return { added: out.length, skipped: skipped, unsorted: out.filter(o => o.Category === 'Unsorted').length };
 }
 
@@ -1311,6 +1464,7 @@ function settings_() {
   return o;
 }
 function setSetting_(k, v) {
+  if (/MoodTime$/.test(k)) v = "'" + v;   // stay text: the Sheet would turn 21:00 into a date and lose the time
   const r = read_('Settings').find(x => x.Key === k);
   if (r) update_('Settings', r._row, { Value: v });
   else append_('Settings', { Key: k, Value: v });

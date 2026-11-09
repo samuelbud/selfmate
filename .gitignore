@@ -9,6 +9,7 @@
 !tools/
 !tools/privacy-check.js
 !tools/check-live.js
+!tools/check-page.js
 !apps-script/
 !apps-script/Code.gs
 !apps-script/Push.gs

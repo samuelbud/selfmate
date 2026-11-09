@@ -110,25 +110,30 @@ const subsOf_ = role => JSON.parse(prop_('PUSH_' + role) || '[]');
 function saveSubs_(role, list) { setProp_('PUSH_' + role, JSON.stringify(list.slice(-5))); }
 
 // Send an empty push to every phone of this person. Returns how many accepted it; dead addresses are forgotten.
-function pushTo_(role) {
-  const subs = subsOf_(role), alive = [];
+function pushTo_(role, why) {
+  const subs = subsOf_(role), alive = [], codes = [];
   let ok = 0;
   subs.forEach(s => {
     const v = vapidJwt_(s.endpoint);
     let code = 0;
     try {
       code = UrlFetchApp.fetch(s.endpoint, { method: 'post', muteHttpExceptions: true, payload: '',
-        headers: { TTL: '7200', Urgency: 'normal', Authorization: 'vapid t=' + v.jwt + ', k=' + v.pub } }).getResponseCode();
+        headers: { TTL: '7200', Urgency: 'high', Authorization: 'vapid t=' + v.jwt + ', k=' + v.pub } }).getResponseCode();
     } catch (e) { code = 0; }
+    codes.push(code);
     if (code === 404 || code === 410) return;   // the phone dropped this address (app removed, permission off)
     alive.push(s);
     if (code >= 200 && code < 300) ok++;
   });
   if (alive.length !== subs.length) saveSubs_(role, alive);
+  pushRecord_(role, { why: why || 'test', ok: ok, phones: subs.length, codes: codes });
   return ok;
 }
 
 // ---------- the evening reminder ----------
+// The last attempt, shown under Me → 🔔, so a missing reminder can be told apart from one the phone held back.
+function pushRecord_(role, o) { setProp_('PUSH_LAST_' + role, JSON.stringify(Object.assign({ at: Date.now() }, o))); }
+function pushLast_(role) { try { return JSON.parse(prop_('PUSH_LAST_' + role) || 'null'); } catch (e) { return null; } }
 const moodKey_ = (role, k) => (role === 'owner' ? '' : 'Partner') + k;   // MoodTime / PartnerMoodTime …
 function moodPrefs_(role, s) {
   const t = String(s[moodKey_(role, 'MoodTime')] || '');
@@ -143,9 +148,15 @@ function pushTick() {
     const pref = moodPrefs_(role, s), snooze = Number(prop_('PUSH_SNOOZE_' + role) || 0);
     const due = snooze ? Date.now() >= snooze : pref.on && hm >= pref.time && prop_('PUSH_SENT_' + role) !== today;
     if (!due) return;
+    // Only counts as done once the push service took it; otherwise the next check, 15 minutes later, tries again.
+    let done = ratedOn_(role, today);
+    if (!done) {
+      try { done = pushTo_(role, 'evening') > 0; }
+      catch (e) { pushRecord_(role, { why: 'evening', ok: 0, phones: subsOf_(role).length, error: String(e.message || e).slice(0, 200) }); }
+    }
+    if (!done) return;
     setProp_('PUSH_SNOOZE_' + role, '0');
     setProp_('PUSH_SENT_' + role, today);
-    if (!ratedOn_(role, today)) pushTo_(role);
   });
 }
 function ensurePushTrigger_() {
