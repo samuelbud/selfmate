@@ -346,7 +346,33 @@ const fmt = iso => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB',
 const isDone = d => d.LastDone && d.Due && d.LastDone >= d.Due && !(+d.RepeatMonths > 0);
 // A date's optional time (text like 14:30): shown after the day, and orders dates on the same day.
 const dTime = d => /^\d{1,2}:\d{2}$/.test(String(d.Time || '')) ? String(d.Time).padStart(5, '0') : '';
-const whenTxt = d => fmt(d.Due) + (dTime(d) ? ', ' + dTime(d) : '');
+const addDaysISO = (iso, n) => { const t = new Date(iso + 'T12:00:00'); t.setDate(t.getDate() + n); return t.toISOString().slice(0, 10); };
+// The days a date covers: its chosen days (Days), a from–to (Due to End), or just Due.
+const dayList = s => [...new Set(String(s || '').split(',').map(x => x.trim()).filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x)))].sort();
+function spanDays(d) {
+  const l = dayList(d.Days);
+  if (l.length) return l;
+  if (d.Due && d.End && d.End > d.Due) { const o = []; for (let x = d.Due; x <= d.End && o.length < 400; x = addDaysISO(x, 1)) o.push(x); return o; }
+  return d.Due ? [d.Due] : [];
+}
+const lastDay = d => { const l = spanDays(d); return l.length ? l[l.length - 1] : d.Due; };
+// "9–16 Dec 2026 (8 days)", "28 Nov – 3 Dec 2026 (6 days)", "19, 20, 22, 23 Nov 2026 (4 days)"
+function spanTxt(d) {
+  const l = spanDays(d);
+  if (l.length < 2) return fmt(d.Due);
+  const p = iso => { const x = new Date(iso + 'T00:00:00'); return { d: x.getDate(), m: x.toLocaleDateString('en-GB', { month: 'short' }), y: x.getFullYear() }; };
+  const n = ` (${l.length} days)`;
+  if (!dayList(d.Days).length) {
+    const a = p(l[0]), b = p(l[l.length - 1]);
+    if (a.y === b.y && a.m === b.m) return `${a.d}–${b.d} ${b.m} ${b.y}` + n;
+    return `${a.d} ${a.m}${a.y === b.y ? '' : ' ' + a.y} – ${b.d} ${b.m} ${b.y}` + n;
+  }
+  const groups = [];
+  l.map(p).forEach(x => { const g = groups[groups.length - 1]; if (g && g.m === x.m && g.y === x.y) g.d.push(x.d); else groups.push({ m: x.m, y: x.y, d: [x.d] }); });
+  const oneYear = groups.every(g => g.y === groups[0].y);
+  return groups.map((g, i) => g.d.join(', ') + ' ' + g.m + (!oneYear || i === groups.length - 1 ? ' ' + g.y : '')).join(', ') + n;
+}
+const whenTxt = d => spanTxt(d) + (dTime(d) ? ', ' + dTime(d) : '');
 const byDue = (a, b) => (a.Due + ' ' + dTime(a)) < (b.Due + ' ' + dTime(b)) ? -1 : 1;
 const sum = (a, f) => a.reduce((s, x) => s + (+f(x) || 0), 0);
 const yes = v => v === true || String(v).toLowerCase() === 'yes';
@@ -527,7 +553,7 @@ function applyLocal(action, d) {
     const r = D.dates.find(x => x._row === d.row), t = todayISO();
     if (!r) return false;
     r.LastDone = t;
-    if (+r.RepeatMonths && r.Due) { let n = r.Due; do { n = addMonthsISO(n, +r.RepeatMonths); } while (n <= t); r.Due = n; }
+    rollDate(r, t);
     return true;
   }
   return false;
@@ -536,6 +562,16 @@ function addMonthsISO(iso, n) {
   const [y, m, day] = iso.split('-').map(Number), last = new Date(y, m - 1 + n + 1, 0).getDate();
   const x = new Date(y, m - 1 + n, Math.min(day, last));
   return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0');
+}
+function rollDate(r, t) {
+  const m = +r.RepeatMonths;
+  if (!(m && r.Due)) return;
+  let k = 0, n;
+  do { k++; n = addMonthsISO(r.Due, k * m); } while (n <= t);
+  const move = iso => addMonthsISO(iso, k * m);
+  if (r.End) r.End = move(r.End);
+  if (r.Days) r.Days = dayList(r.Days).map(move).join(', ');
+  r.Due = n;
 }
 const add = (tab, values, msg) => act('addRow', { tab, values }, msg || 'Saved ✓');
 const upd = (tab, row, values, msg) => act('updateRow', { tab, row, values }, msg);
@@ -828,7 +864,7 @@ function checkinModal() {
   } else if (st.key === 'ahead') {
     const soon = D.dates.filter(d => d.Due && !isDone(d) && days(d.Due) <= 30).sort(byDue);
     body = soon.length ? '<p class="muted small">Already done? Tick it. Needs a step this week? Do it, or make it your plan in step 5.</p>' +
-      soon.map(d => `<div class="row"><div class="grow"><div>${esc(d.Title)}</div><div class="muted small">${whenTxt(d)}${days(d.Due) < 0 ? ', late' : ''}${+d.Cost ? ', ' + lei(d.Cost) : ''}</div></div>
+      soon.map(d => `<div class="row"><div class="grow"><div>${esc(d.Title)}</div><div class="muted small">${whenTxt(d)}${days(lastDay(d)) < 0 ? ', late' : ''}${+d.Cost ? ', ' + lei(d.Cost) : ''}</div></div>
         <button class="btn ghost" onclick="ciAgain(doneDate(${d._row}))">✓ Done</button></div>`).join('')
       : '<p>✓ Nothing due in the next 30 days.</p>';
   } else if (st.key === 'balances') {
@@ -981,60 +1017,124 @@ function saveGoal(row) {
 }
 
 // ---------- DATES ----------
-// Deadlines as tickets: days left on the left, coloured by how soon.
+// Deadlines as tickets: days left on the left, coloured by how soon. A date over several days shows once, as its span.
+function ticketDays(first, last, notDone) {
+  const n = first ? days(first) : null, end = last ? days(last) : n;
+  if (n !== null && n <= 0 && end >= 0 && last !== first) return { cls: 'soon', num: 'now', unit: 'until ' + fmt(last).replace(/ \d{4}$/, '') };   // running: the trip or training is today
+  const k = n !== null && n < 0 && notDone ? end : n;   // late counts from the last day
+  const cls = k === null ? 'none' : k <= 7 ? 'soon' : k <= 30 ? 'near' : 'later';
+  const num = k === null ? '+' : k === 0 ? '!' : Math.abs(k) > 99 ? Math.round(Math.abs(k) / 30) : Math.abs(k);
+  const unit = k === null ? 'set date' : k === 0 ? 'today' : Math.abs(k) > 99 ? 'months' : k < 0 ? 'days late' : k === 1 ? 'day' : 'days';
+  return { cls, num, unit };
+}
 function dateRow(d) {
-  const n = d.Due ? days(d.Due) : null;
-  const cls = n === null ? 'none' : n <= 7 ? 'soon' : n <= 30 ? 'near' : 'later';
-  const num = n === null ? '+' : n === 0 ? '!' : Math.abs(n) > 99 ? Math.round(Math.abs(n) / 30) : Math.abs(n);
-  const unit = n === null ? 'set date' : n === 0 ? 'today' : Math.abs(n) > 99 ? 'months' : n < 0 ? 'days late' : n === 1 ? 'day' : 'days';
+  const t = ticketDays(d.Due, lastDay(d), !isDone(d));
   const meta = [d.Due ? whenTxt(d) : '', +d.Cost ? lei(d.Cost) : '', +d.RepeatMonths ? 'every ' + rep(+d.RepeatMonths) : ''].filter(Boolean).join(', ');
-  return `<div class="ticket" onclick="dateModal(${d._row})"><div class="d ${cls}"><div><b>${num}</b><span>${unit}</span></div></div>
+  return `<div class="ticket" onclick="dateModal(${d._row})"><div class="d ${t.cls}"><div><b>${t.num}</b><span>${t.unit}</span></div></div>
     <div class="t"><b>${AREA[d.Area] || '📌'} ${esc(d.Title)}</b><div>${meta || 'Tap to set a date'}</div></div>
     <div class="act">${d.Due && !isDone(d) ? `<button class="done" aria-label="Mark ${esc(d.Title)} done" onclick="event.stopPropagation();doneDate(${d._row})">✓</button>` : ''}</div></div>`;
+}
+// A trip from the Trips tab, shown among the dates (read only here: tap to open the trip).
+function tripRow(t) {
+  const s = ticketDays(t.Start, t.End || t.Start, false);
+  return `<div class="ticket" onclick="go('trips','${tq(t)}')"><div class="d ${s.cls}"><div><b>${s.num}</b><span>${s.unit}</span></div></div>
+    <div class="t"><b>${esc(t.Emoji || '✈️')} ${esc(t.Trip)}</b><div>${spanTxt({ Due: t.Start, End: t.End })}, trip</div></div><div class="act"></div></div>`;
 }
 async function doneDate(row) {
   const d = D.dates.find(x => x._row === row);
   await act('markDone', { row }, +d.RepeatMonths ? 'Done ✓ Next one scheduled' : 'Done ✓');
 }
+// Trips that haven't ended yet, with exact dates (a trip you only remember roughly isn't a date).
+const dateTrips = () => (D.trips || []).filter(t => t.Start && !t.Approx && !isPast(t));
 function viewDates() {
-  const area = SEG.area || 'All';
-  const list = D.dates.filter(d => area === 'All' || d.Area === area);
-  const open = list.filter(d => d.Due && !isDone(d)).sort(byDue);
+  const trips = dateTrips(), area = SEG.area === 'Trips' && !trips.length ? 'All' : SEG.area || 'All';
+  const list = area === 'Trips' ? [] : D.dates.filter(d => area === 'All' || d.Area === area);
+  // one list of what's coming: open dates and, under All or Trips, trips; each with its first and last day
+  const open = list.filter(d => d.Due && !isDone(d)).map(d => ({ first: d.Due, last: lastDay(d), key: d.Due + ' ' + dTime(d), html: () => dateRow(d) }))
+    .concat(area === 'All' || area === 'Trips' ? trips.map(t => ({ first: t.Start, last: t.End || t.Start, key: t.Start + ' ', html: () => tripRow(t) })) : [])
+    .sort((a, b) => a.key < b.key ? -1 : 1);
   const areas = ['All'].concat([...new Set(D.dates.map(d => d.Area))]);
-  const sec = (title, rows) => rows.length ? `<h2>${title} (${rows.length})</h2>${rows.map(dateRow).join('')}` : '';
+  const sec = (title, rows) => rows.length ? `<h2>${title} (${rows.length})</h2>${rows.map(r => r.html ? r.html() : dateRow(r)).join('')}` : '';
   const html = `
     <button class="btn wide" onclick="dateModal()">+ Add a date</button>
-    <div class="chips">${areas.map(a => `<button class="chip ${a === area ? 'on' : ''}" onclick="SEG.area='${a}';render()">${AREA[a] || ''} ${a}</button>`).join('')}</div>
-    ${sec('⚠️ Overdue', open.filter(d => days(d.Due) < 0))}
-    ${sec('Next 30 days', open.filter(d => days(d.Due) >= 0 && days(d.Due) <= 30))}
-    ${sec('Later', open.filter(d => days(d.Due) > 30))}
+    <div class="chips">${areas.map(a => `<button class="chip ${a === area ? 'on' : ''}" onclick="SEG.area='${a}';render()">${AREA[a] || ''} ${a}</button>`).join('')}${trips.length ? `<button class="chip ${area === 'Trips' ? 'on' : ''}" onclick="SEG.area='Trips';render()">✈️ Trips</button>` : ''}</div>
+    ${sec('⚠️ Overdue', open.filter(r => days(r.last) < 0))}
+    ${sec('Next 30 days', open.filter(r => days(r.last) >= 0 && days(r.first) <= 30))}
+    ${sec('Later', open.filter(r => days(r.first) > 30))}
     <div id="need">${sec('📝 Needs a date', list.filter(d => !d.Due))}</div>
     ${sec('✅ Done', list.filter(isDone))}
-    <p class="muted small">To delete or bulk-edit, open the <b>Dates</b> tab in your Google Sheet.</p>`;
+    ${area === 'Trips' || (area === 'All' && trips.length) ? '<p class="muted small">Trips come from the Trips tab: change them there.</p>' : ''}
+    <p class="muted small">To bulk-edit, open the <b>Dates</b> tab in your Google Sheet.</p>`;
   if (SUB === 'need') setTimeout(() => { const e = $('#need'); if (e) e.scrollIntoView(); SUB = null; }, 50);
   return html;
 }
+// While the form is open: one day, a from–to, or chosen days (kept in DSPAN.days).
+let DSPAN = { mode: 'one', days: [] };
+function dspanHtml() {
+  const m = DSPAN.mode;
+  if (m === 'several') return `<label>The days</label>
+    <div class="chips">${DSPAN.days.map((x, i) => `<button class="chip on" onclick="dspanDrop(${i})" aria-label="Remove ${fmt(x)}">${esc(fmt(x).replace(/ \d{4}$/, ''))} ×</button>`).join('') || '<span class="muted small">No days yet.</span>'}</div>
+    <div class="inline"><input id="dadd" type="date" value="${esc(DSPAN.days.length ? addDaysISO(DSPAN.days[DSPAN.days.length - 1], 1) : '')}"><button class="btn ghost" onclick="dspanAdd()">Add day</button></div>`;
+  return `<div class="inline"><div style="flex:1"><label>${m === 'range' ? 'From' : 'Due date'}</label><input id="dd" type="date" value="${esc(DSPAN.due)}" onchange="DSPAN.due=this.value"></div>
+      ${m === 'range' ? `<div style="flex:1"><label>To (last day)</label><input id="de" type="date" value="${esc(DSPAN.end)}" onchange="DSPAN.end=this.value"></div>` : ''}</div>`;
+}
+function dspanMode(m) {
+  if ($('#dd')) DSPAN.due = val('dd');
+  if ($('#de')) DSPAN.end = val('de');
+  if (m === 'several' && !DSPAN.days.length && DSPAN.due) DSPAN.days = spanDays({ Due: DSPAN.due, End: DSPAN.mode === 'range' ? DSPAN.end : '' }).slice(0, 60);
+  if (m !== 'several' && DSPAN.mode === 'several' && DSPAN.days.length) { DSPAN.due = DSPAN.days[0]; DSPAN.end = DSPAN.days[DSPAN.days.length - 1]; }
+  DSPAN.mode = m;
+  $('#dspan').innerHTML = dspanHtml();
+}
+function dspanAdd() {
+  const x = val('dadd');
+  if (!x) return toast('Pick a day first');
+  DSPAN.days = [...new Set(DSPAN.days.concat(x))].sort();
+  $('#dspan').innerHTML = dspanHtml();
+}
+function dspanDrop(i) { DSPAN.days.splice(i, 1); $('#dspan').innerHTML = dspanHtml(); }
 function dateModal(row, preset) {
   const d = row ? D.dates.find(x => x._row === row) : Object.assign({ Area: 'Other', RepeatMonths: 12 }, preset || {});
+  const chosen = spanDays({ Days: d.Days });
+  DSPAN = { mode: chosen.length > 1 ? 'several' : d.End && d.End > d.Due ? 'range' : 'one', days: chosen, due: d.Due || '', end: d.End || '' };
   const reps = [[0, 'Does not repeat'], [1, 'Every month'], [3, 'Every 3 months'], [6, 'Every 6 months'], [12, 'Every year'], [24, 'Every 2 years'], [120, 'Every 10 years']];
   openModal(`<h3>${row ? 'Edit date' : 'New date'}</h3>
     <label>What</label><input id="dt" value="${esc(d.Title)}" placeholder="e.g. RCA renewal">
-    <div class="inline"><div style="flex:3"><label>Due date</label><input id="dd" type="date" value="${esc(d.Due)}"></div>
-      <div style="flex:2"><label>Time (optional)</label><input id="dtm" type="time" value="${esc(dTime(d))}"></div></div>
+    <label>Days</label><select id="dm" onchange="dspanMode(this.value)">${[['one', 'One day'], ['range', 'From – to (e.g. a trip)'], ['several', 'Several days (e.g. a training)']]
+      .map(o => `<option value="${o[0]}" ${o[0] === DSPAN.mode ? 'selected' : ''}>${o[1]}</option>`).join('')}</select>
+    <div id="dspan">${dspanHtml()}</div>
+    <label>Time (optional${DSPAN.mode === 'one' ? '' : ', every day'})</label><input id="dtm" type="time" value="${esc(dTime(d))}">
     <label>Area</label><select id="da">${Object.keys(AREA).map(a => `<option ${a === d.Area ? 'selected' : ''}>${a}</option>`).join('')}</select>
     <label>Repeats</label><select id="dr">${reps.map(r => `<option value="${r[0]}" ${+d.RepeatMonths === r[0] ? 'selected' : ''}>${r[1]}</option>`).join('')}</select>
     <label>Cost (lei, optional: feeds the yearly-bills pot)</label><input id="dc" type="number" inputmode="decimal" value="${esc(d.Cost)}">
     <label>Notes</label><input id="dn" value="${esc(d.Notes)}">
     ${D.role === 'owner' ? `<label><input id="dp" type="checkbox" style="width:auto" ${d.Private === 'yes' ? 'checked' : ''}> Private (only me)</label>` : ''}
-    <div class="btns"><button class="btn" onclick="saveDate(${row || 0})">Save</button></div>`);
+    <div class="btns"><button class="btn" onclick="saveDate(${row || 0})">Save</button>
+      ${row ? `<button class="btn ghost" onclick="removeDate(${row})">Remove</button>` : ''}</div>`);
 }
 function saveDate(row) {
   const p = document.getElementById('dp');
-  const v = { Title: val('dt'), Due: val('dd'), Area: val('da'), RepeatMonths: +val('dr'), Cost: val('dc') ? +val('dc') : '', Notes: val('dn') };
+  if ($('#dd')) DSPAN.due = val('dd');
+  if ($('#de')) DSPAN.end = val('de');
+  const v = { Title: val('dt'), Area: val('da'), RepeatMonths: +val('dr'), Cost: val('dc') ? +val('dc') : '', Notes: val('dn'), End: '', Days: '' };
+  if (DSPAN.mode === 'several') {
+    v.Due = DSPAN.days[0] || '';
+    if (DSPAN.days.length > 1) v.Days = DSPAN.days.join(', ');
+  } else {
+    v.Due = DSPAN.due;
+    if (DSPAN.mode === 'range' && DSPAN.end && v.Due) {
+      if (DSPAN.end < v.Due) return toast('The last day is before the first');
+      if (DSPAN.end > v.Due) v.End = DSPAN.end;
+    }
+  }
   v.Time = v.Due ? val('dtm') : '';   // a time only means something with a day
   if (p) v.Private = p.checked ? 'yes' : '';
   if (!v.Title) return toast('Give it a name');
   row ? upd('Dates', row, v, 'Saved ✓') : add('Dates', v);
+}
+function removeDate(row) {
+  const d = D.dates.find(x => x._row === row);
+  if (d && confirm(`Remove "${d.Title}"? It also leaves Google Calendar.`)) act('deleteRow', { tab: 'Dates', row }, 'Removed');
 }
 
 // ---------- MONEY ----------
@@ -3664,6 +3764,7 @@ const MOCK = (() => {
       { _row: 3, Title: 'ITP: Car', Area: 'Car', Due: off(24), RepeatMonths: 24, Cost: 200 },
       { _row: 4, Title: 'Impozite locale: tranșa 1', Area: 'Taxes', Due: off(149), RepeatMonths: 12, Cost: 900 },
       { _row: 5, Title: 'Dentist check-up', Area: 'Health', Due: off(-3), RepeatMonths: 6, Time: '09:30' },
+      { _row: 9, Title: 'Training', Area: 'Other', Due: off(6), Days: [6, 7, 9, 10].map(off).join(', '), RepeatMonths: 0, Time: '09:00' },
       { _row: 6, Title: 'Passport expiry', Area: 'Documents', Due: '', RepeatMonths: 0 },
       { _row: 7, Title: 'D112: salaries declaration', Area: 'SRL', Due: off(23), RepeatMonths: 1, Private: 'yes' },
       { _row: 8, Title: 'Partner birthday', Area: 'People', Due: off(40), RepeatMonths: 12 },
@@ -3788,8 +3889,7 @@ const MOCK = (() => {
     if (action === 'updateRow') { const r = db[tabKey(d.tab)].find(x => x._row === d.row), v = Object.assign({}, d.values);
       if (v._photos || v._remove) pics(v, r);
       Object.assign(r, v); }
-    if (action === 'markDone') { const r = db.dates.find(x => x._row === d.row); r.LastDone = t;
-      if (+r.RepeatMonths) { const n = new Date(r.Due + 'T00:00:00'); n.setMonth(n.getMonth() + +r.RepeatMonths); r.Due = n.toISOString().slice(0, 10); } }
+    if (action === 'markDone') { const r = db.dates.find(x => x._row === d.row); r.LastDone = t; rollDate(r, t); }
     if (action === 'answer') db.transactions.forEach(x => { if (x._row === d.row) x.Category = d.category; });
     if (action === 'setSetting') db.settings[d.key] = d.value;
     if (action === 'deleteRow') { const k = tabKey(d.tab); db[k] = db[k].filter(r => r._row !== d.row); }

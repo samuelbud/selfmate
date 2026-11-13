@@ -18,7 +18,9 @@
 const TABS = {
   Settings:     ['Key', 'Value', 'Notes'],
   // Time: optional, text like 14:30 (empty = all day). With a time, Google Calendar gets a 1-hour event instead of an all-day one.
-  Dates:        ['Title', 'Area', 'Due', 'RepeatMonths', 'Cost', 'Private', 'LastDone', 'Notes', 'EventId', 'Time'],
+  // Several days: End = the last day of a from–to (Due = the first), or Days = chosen days, comma separated (2026-11-19, 2026-11-20…;
+  // Due = the first of them). Empty = one day. EventId then holds one calendar event per day, comma separated.
+  Dates:        ['Title', 'Area', 'Due', 'RepeatMonths', 'Cost', 'Private', 'LastDone', 'Notes', 'EventId', 'Time', 'End', 'Days'],
   // Tag (optional) = what the insights treat it as: travel | treat (small everyday treats: coffee, eating out) | subscription
   Categories:   ['Group', 'Category', 'Emoji', 'Type', 'MonthlyTarget', 'Tag'],
   Rules:        ['Match', 'Category'],
@@ -75,9 +77,9 @@ const HOBBY_TABS = ['Projects', 'Tasks', 'Items', 'ProjectLog'];   // personal: 
 const PERSONAL_TABS = HOBBY_TABS.concat(['Countries', 'Wishlist', 'Mood', 'Medicines', 'Measures', 'HealthLog']);
 const OWN_ONLY_TABS = ['Wishlist', 'Mood', 'Medicines', 'Measures', 'HealthLog'];   // never shown to the other person, not even while sharing   // rows with an Owner: each link sees and changes only its own
 const EDITABLE_TABS = ['Dates', 'Transactions', 'Goals', 'Categories', 'Rules', 'Trips', 'TripItems', 'Balances', 'Lines', 'Recipes', 'Ideas'].concat(PRIVATE_TABS, PERSONAL_TABS);
-const DELETABLE_TABS = ['Goals', 'Balances', 'ProjectLog', 'Countries', 'TripItems', 'Lines', 'Recipes', 'Ideas'].concat(OWN_ONLY_TABS);   // rows you can remove from the app (everything else: delete in the Sheet)
+const DELETABLE_TABS = ['Goals', 'Balances', 'ProjectLog', 'Countries', 'TripItems', 'Lines', 'Recipes', 'Ideas', 'Dates'].concat(OWN_ONLY_TABS);   // rows you can remove from the app (everything else: delete in the Sheet)
 const BIG_PROJECT_TOOLS = 'time,money,journal,distance,tasks,parts';
-const DATE_COLS = ['Due', 'LastDone', 'Date', 'Started', 'PaidOn', 'Start', 'End', 'Updated', 'Added', 'WaitUntil', 'Decided', 'StockDate', 'TriedOn', 'DoneOn'];
+const DATE_COLS = ['Due', 'LastDone', 'Date', 'Started', 'PaidOn', 'Start', 'End', 'Updated', 'Added', 'WaitUntil', 'Decided', 'StockDate', 'TriedOn', 'DoneOn'];   // Dates → End is a date too, but its name is shared with Trips (already a date column)
 // The partner may change only their own evening-reminder settings and the categories of the shared recipe and idea lists.
 const PARTNER_SETTINGS = ['PartnerMoodTime', 'PartnerMoodPush', 'PartnerMoodTags', 'RecipeCategories', 'IdeaCategories'];
 // What identifies a row, per tab. Rows are addressed by their Sheet row number, which shifts when a row above is
@@ -329,7 +331,7 @@ function imports_() {
 }
 
 function upgrade_() {
-  if (prop_('SCHEMA') === '9e' && imports_().every(h => prop_('IMPORTED_' + h.id))) return;
+  if (prop_('SCHEMA') === '9f' && imports_().every(h => prop_('IMPORTED_' + h.id))) return;
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -393,6 +395,12 @@ function upgrade_() {
       const sh = sheet_('Dates'), j = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String).indexOf('Time');
       if (j >= 0) sh.getRange(1, j + 1, sh.getMaxRows(), 1).setNumberFormat('@');   // stays text: the Sheet would turn 14:30 into a date
       setProp_('SCHEMA', '9e');
+    }
+    if (prop_('SCHEMA') < '9f') {         // dates over several days: End (a from–to) or Days (chosen days)
+      ensureTabs_(ss_());
+      const sh = sheet_('Dates'), j = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String).indexOf('Days');
+      if (j >= 0) sh.getRange(1, j + 1, sh.getMaxRows(), 1).setNumberFormat('@');   // a list of days stays text
+      setProp_('SCHEMA', '9f');
     }
     imports_().filter(h => !prop_('IMPORTED_' + h.id)).forEach(h => {
       appendRows_('Transactions', h.transactions);
@@ -699,6 +707,12 @@ function api(key, action, data) {
         if (!DELETABLE_TABS.includes(data.tab)) throw new Error('Delete these in the Sheet');
         if (PERSONAL_TABS.includes(data.tab)) checkHobby_(data.tab, who, {}, data.row);
         if (data.tab === 'TripItems') checkTab_(data.tab, who, read_('TripItems').find(r => r._row === data.row));
+        if (data.tab === 'Dates') {
+          const d = read_('Dates').find(r => r._row === data.row);
+          if (!d) throw new Error('Date not found');
+          if (d.Private === 'yes' && !who.canPrivate) throw new Error('This part is private');
+          dropEvents_(d);
+        }
         if (data.tab === 'ProjectLog') {
           const l = read_('ProjectLog').find(r => r._row === data.row);
           ids_(l.Photo).concat(ids_(l.Thumb)).forEach(trashFile_);   // photos go to the Drive bin (restorable for 30 days)
@@ -1145,10 +1159,13 @@ function markDone_(row, who) {
   const today = iso_(new Date());
   const n = Number(r.RepeatMonths) || 0;
   const values = { LastDone: today };
-  if (n > 0 && r.Due) {
-    let next = parse_(r.Due);
-    do { next = addMonths_(next, n); } while (iso_(next) <= today);
+  if (n > 0 && r.Due) {   // counted from the original day each time, so the 31st doesn't drift to the 28th
+    let k = 0, next;
+    do { k++; next = addMonths_(parse_(r.Due), k * n); } while (iso_(next) <= today);
     values.Due = iso_(next);
+    const move = iso => iso_(addMonths_(parse_(iso), k * n));
+    if (r.End) values.End = move(r.End);
+    if (r.Days) values.Days = dayList_(r.Days).map(move).join(', ');
   }
   update_('Dates', row, values);
   queueSync_(row);
@@ -1384,33 +1401,67 @@ function syncRow_(row) {
   const r = read_('Dates').find(x => x._row === row);
   if (r) syncOne_(r);
 }
+// The chosen days of a date (Days column): valid days only, in order, no repeats.
+const dayList_ = s => [...new Set(String(s || '').split(',').map(x => x.trim()).filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x)))].sort();
+// The calendar events a date should have. A from–to with no time is one event over all its days;
+// chosen days, or any date with a time, get one event per day.
+function eventsWanted_(r) {
+  const hm = String(r.Time || '').match(/^(\d{1,2}):(\d{2})$/), list = dayList_(r.Days);
+  const next = d => { const x = new Date(d); x.setDate(x.getDate() + 1); return x; };
+  let days = list.length ? list : [r.Due];
+  if (!list.length && r.End && r.End > r.Due) {
+    if (!hm) return [{ allDay: true, start: parse_(r.Due), end: next(parse_(r.End)) }];
+    days = [];
+    for (let d = parse_(r.Due); iso_(d) <= r.End; d = next(d)) days.push(iso_(d));
+  }
+  return days.map(iso => {
+    const day = parse_(iso);
+    if (!hm) return { allDay: true, start: day, end: next(day) };
+    const start = new Date(day); start.setHours(+hm[1], +hm[2], 0, 0);
+    return { allDay: false, start: start, end: new Date(start.getTime() + 60 * 60000) };
+  });
+}
+function eventsOf_(r, cal) {
+  return String(r.EventId || '').split(',').map(x => x.trim()).filter(Boolean)
+    .map(id => { try { return cal.getEventById(id); } catch (e) { return null; } });
+}
+function dropEvents_(r) {
+  const cal = calendar_(r.Private === 'yes' ? 'CAL_PRIVATE' : 'CAL_SHARED');
+  if (cal) eventsOf_(r, cal).forEach(e => { if (e) try { e.deleteEvent(); } catch (x) { /* already gone */ } });
+}
 function syncOne_(r) {
   const cal = calendar_(r.Private === 'yes' ? 'CAL_PRIVATE' : 'CAL_SHARED');
   if (!cal) return;
-  const col = TABS.Dates.indexOf('EventId') + 1;
-  let ev = null;
-  if (r.EventId) { try { ev = cal.getEventById(r.EventId); } catch (e) { ev = null; } }
+  const col = TABS.Dates.indexOf('EventId') + 1, setIds = v => sheet_('Dates').getRange(r._row, col).setValue(v);
+  const have = eventsOf_(r, cal);
   if (!r.Due || isDone_(r)) {
-    if (ev) ev.deleteEvent();
-    if (r.EventId) sheet_('Dates').getRange(r._row, col).setValue('');
+    have.forEach(e => { if (e) e.deleteEvent(); });
+    if (r.EventId) setIds('');
     return;
   }
-  const day = parse_(r.Due), hm = String(r.Time || '').match(/^(\d{1,2}):(\d{2})$/);
-  let start = null, end = null;
-  if (hm) { start = new Date(day); start.setHours(+hm[1], +hm[2], 0, 0); end = new Date(start.getTime() + 60 * 60000); }
+  const want = eventsWanted_(r);
   // All day: 28 days (Google's max), 7 days and the day before. With a time: 7 days, 1 day and 2 hours before.
-  const remind = e => { e.removeAllReminders(); (start ? [10080, 1440, 120] : [40320, 10080, 900]).forEach(m => e.addPopupReminder(m)); };
-  if (!ev) {
-    ev = start ? cal.createEvent(r.Title, start, end) : cal.createAllDayEvent(r.Title, day);
-    remind(ev);
-    sheet_('Dates').getRange(r._row, col).setValue(ev.getId());
-  } else {
-    if (ev.getTitle() !== r.Title) ev.setTitle(r.Title);
-    const wasAllDay = ev.isAllDayEvent();
-    if (start) { if (wasAllDay || ev.getStartTime().getTime() !== start.getTime()) ev.setTime(start, end); }
-    else ev.setAllDayDate(day);
-    if (wasAllDay !== !start) remind(ev);   // switched between all day and a set time
+  const remind = (e, allDay) => { e.removeAllReminders(); (allDay ? [40320, 10080, 900] : [10080, 1440, 120]).forEach(m => e.addPopupReminder(m)); };
+  if (have.length === want.length && have.every(Boolean)) {   // same number of events: change them in place
+    have.forEach((e, i) => {
+      const w = want[i], wasAllDay = e.isAllDayEvent();
+      if (e.getTitle() !== r.Title) e.setTitle(r.Title);
+      if (w.allDay) {
+        const one = w.end - w.start <= 864e5 * 1.1;   // one day (a day can be 23 or 25 hours long)
+        if (one) e.setAllDayDate(w.start); else e.setAllDayDates(w.start, w.end);
+      } else if (wasAllDay || e.getStartTime().getTime() !== w.start.getTime()) e.setTime(w.start, w.end);
+      if (wasAllDay !== w.allDay) remind(e, w.allDay);   // switched between all day and a set time
+    });
+    return;
   }
+  have.forEach(e => { if (e) try { e.deleteEvent(); } catch (x) { /* already gone */ } });   // the days changed: start again
+  const ids = want.map(w => {
+    const e = w.allDay ? (w.end - w.start <= 864e5 * 1.1 ? cal.createAllDayEvent(r.Title, w.start) : cal.createAllDayEvent(r.Title, w.start, w.end))
+      : cal.createEvent(r.Title, w.start, w.end);
+    remind(e, w.allDay);
+    return e.getId();
+  });
+  setIds(ids.join(','));
 }
 function calendar_(propKey, name) {
   const id = prop_(propKey);
