@@ -155,7 +155,7 @@ window.addEventListener('message', async e => {
   const reply = m => e.source && e.source.postMessage(Object.assign({ selfmate: 'push-status' }, m), e.origin);
   try {
     if (e.data.selfmate === 'hello') {
-      if (window.caches && Array.isArray(e.data.lines)) caches.open('selfmate-link').then(c => c.put('lines', new Response(JSON.stringify({ lines: e.data.lines, offset: e.data.offset || 0 })))).catch(() => {});
+      if (window.caches && Array.isArray(e.data.lines)) caches.open('selfmate-link').then(c => c.put('lines', new Response(JSON.stringify({ lines: e.data.lines, offset: e.data.offset || 0, title: String(e.data.title || '').slice(0, 80) })))).catch(() => {});
       reply({ subscribed: await isOn() });
     }
     if (e.data.selfmate === 'push-on') { await pushOn(e.source, e.origin); reply({ subscribed: true, changed: true }); }

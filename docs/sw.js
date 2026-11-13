@@ -1,6 +1,6 @@
 // Keeps the SelfMate start page available offline and shows the evening notification.
 // Your data is never cached here: it lives in your Google Sheet and is loaded fresh inside the app.
-const CACHE = 'selfmate-shell-v2';
+const CACHE = 'selfmate-shell-v3';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'badge-96.png',
                'sky-1.png', 'sky-2.png', 'sky-3.png', 'sky-4.png', 'sky-5.png'];
 self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())));
@@ -17,17 +17,26 @@ self.addEventListener('fetch', e => {
 // ---------- evening notification ----------
 // The push from SelfMate is empty; the words come from your own SelfMate (tonight's line from your Lines tab).
 // Tonight's line from the saved list (the app refreshes it each time it opens), counted the same way as in the app.
-const savedLine = async () => {
+// The saved title (with your name) and tonight's line from the saved list.
+const saved = async () => {
   const r = await (await caches.open('selfmate-link')).match('lines');
-  if (!r) return '';
-  const { lines, offset } = await r.json(), now = new Date();
-  return lines.length ? lines[(Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 864e5) + offset) % lines.length] : '';
+  if (!r) return null;
+  const { lines, offset, title } = await r.json(), now = new Date();
+  return { title: title || '', body: lines.length ? lines[(Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 864e5) + offset) % lines.length] : '' };
 };
 const appLink = () => caches.open('selfmate-link').then(c => c.match('link')).then(r => (r ? r.text() : '')).catch(() => '');
+// A sleeping phone gives a push only a few seconds of internet, and Google's script can take longer to answer.
+// So the notification is built from what is saved on the phone, and SelfMate is asked only when nothing is saved,
+// for at most 4 seconds.
+const askSelfMate = async () => {
+  const link = await appLink();
+  if (!link) return null;
+  const stop = new AbortController(), timer = setTimeout(() => stop.abort(), 4000);
+  try { return await (await fetch(link + '&push=line', { signal: stop.signal })).json(); } finally { clearTimeout(timer); }
+};
 self.addEventListener('push', e => e.waitUntil((async () => {
-  let n = null;
-  try { const link = await appLink(); if (link) n = await (await fetch(link + '&push=line')).json(); } catch (err) { /* offline: plain words */ }
-  if (!n || !n.body) { const line = await savedLine().catch(() => ''); if (line) n = Object.assign({}, n, { body: line }); }
+  let n = await saved().catch(() => null);
+  if (!n || !n.body) n = await askSelfMate().catch(() => null);
   const day = Math.floor(Date.now() / 864e5);
   return self.registration.showNotification((n && n.title) || '🌙 How was your day?', {
     body: (n && n.body) || 'Twenty seconds to rate your mood and energy.',
