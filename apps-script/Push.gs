@@ -141,22 +141,39 @@ function moodPrefs_(role, s) {
 }
 function ratedOn_(role, day) { return read_('Mood').some(m => m.Date === day && (m.Owner || 'owner') === role); }
 
+// The evening a moment belongs to: until 04:00 it is still last night (same rule as the app's ratings).
+const eveningOf_ = ms => iso_(new Date(ms - 4 * 36e5));
+// What happened each evening, kept for two weeks and shown under Me → 🔔, so a quiet evening has a reason.
+function pushLog_(role) { try { return JSON.parse(prop_('PUSH_LOG_' + role) || '[]'); } catch (e) { return []; } }
+function pushNote_(role, day, kind, what, codes) {
+  const log = pushLog_(role).filter(x => !(x.day === day && x.kind === kind));
+  log.push({ day: day, kind: kind, what: what, at: Date.now(), codes: codes || [] });
+  setProp_('PUSH_LOG_' + role, JSON.stringify(log.slice(-14)));
+}
+
 function pushTick() {
   const s = settings_(), now = new Date(), today = iso_(now), hm = Utilities.formatDate(now, Session.getScriptTimeZone(), 'HH:mm');
   ['owner', 'partner'].forEach(role => {
     if (!subsOf_(role).length) return;
     const pref = moodPrefs_(role, s), snooze = Number(prop_('PUSH_SNOOZE_' + role) || 0);
-    const due = snooze ? Date.now() >= snooze : pref.on && hm >= pref.time && prop_('PUSH_SENT_' + role) !== today;
-    if (!due) return;
+    const evening = pref.on && hm >= pref.time && prop_('PUSH_SENT_' + role) !== today;
+    const later = snooze > 0 && Date.now() >= snooze;
+    if (!evening && !later) return;
+    // "In 1 hour" belongs to the evening it was pressed on, even when it comes back after midnight:
+    // it must not count as the next evening's reminder, and a rating of that evening ends it.
+    const day = evening ? today : eveningOf_(snooze - 60 * 60000), kind = evening ? 'evening' : 'later';
     // Only counts as done once the push service took it; otherwise the next check, 15 minutes later, tries again.
-    let done = ratedOn_(role, today);
-    if (!done) {
-      try { done = pushTo_(role, 'evening') > 0; }
-      catch (e) { pushRecord_(role, { why: 'evening', ok: 0, phones: subsOf_(role).length, error: String(e.message || e).slice(0, 200) }); }
+    let done = ratedOn_(role, day);
+    if (done) pushNote_(role, day, kind, 'rated');
+    else {
+      try { done = pushTo_(role, kind) > 0; }
+      catch (e) { pushRecord_(role, { why: kind, ok: 0, phones: subsOf_(role).length, error: String(e.message || e).slice(0, 200) }); }
+      const last = pushLast_(role) || {};
+      pushNote_(role, day, kind, done ? 'sent' : 'failed', last.codes);
     }
     if (!done) return;
-    setProp_('PUSH_SNOOZE_' + role, '0');
-    setProp_('PUSH_SENT_' + role, today);
+    if (later) setProp_('PUSH_SNOOZE_' + role, '0');
+    if (evening || day === today) setProp_('PUSH_SENT_' + role, today);
   });
 }
 function ensurePushTrigger_() {

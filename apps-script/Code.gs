@@ -17,7 +17,8 @@
 // ---------- Sheet structure ----------
 const TABS = {
   Settings:     ['Key', 'Value', 'Notes'],
-  Dates:        ['Title', 'Area', 'Due', 'RepeatMonths', 'Cost', 'Private', 'LastDone', 'Notes', 'EventId'],
+  // Time: optional, text like 14:30 (empty = all day). With a time, Google Calendar gets a 1-hour event instead of an all-day one.
+  Dates:        ['Title', 'Area', 'Due', 'RepeatMonths', 'Cost', 'Private', 'LastDone', 'Notes', 'EventId', 'Time'],
   // Tag (optional) = what the insights treat it as: travel | treat (small everyday treats: coffee, eating out) | subscription
   Categories:   ['Group', 'Category', 'Emoji', 'Type', 'MonthlyTarget', 'Tag'],
   Rules:        ['Match', 'Category'],
@@ -50,6 +51,8 @@ const TABS = {
   Wishlist:     ['Item', 'Price', 'Link', 'Shop', 'Image', 'Added', 'WaitUntil', 'Status', 'Decided', 'Notes', 'Owner'],
   // Recipe ideas to try, shared by both of you. Categories = comma separated (names come from the RecipeCategories setting). Status: empty = to try | tried.
   Recipes:      ['Recipe', 'Link', 'Image', 'Categories', 'Status', 'Added', 'TriedOn', 'Notes'],
+  // Project ideas for later (DIY, garden, crafts…), shared by both of you. Works like Recipes: categories from the IdeaCategories setting. Status: empty = someday | done.
+  Ideas:        ['Idea', 'Link', 'Image', 'Categories', 'Status', 'Added', 'DoneOn', 'Notes'],
   // One evening rating per person per day. Mood and Energy 1–5, Sleep 0–10 (last night), Tags comma separated. Personal.
   Mood:         ['Date', 'Mood', 'Energy', 'Sleep', 'Tags', 'Note', 'Owner', 'SpentEstimate'],
   // Health (personal, never shared). PerDay = pills a day, Stock = pills left on StockDate. Active: empty = yes, "no" = stopped.
@@ -71,12 +74,12 @@ const PRIVATE_TABS =['Invoices', 'SrlMonths', 'SrlCosts'];
 const HOBBY_TABS = ['Projects', 'Tasks', 'Items', 'ProjectLog'];   // personal: each row belongs to one person
 const PERSONAL_TABS = HOBBY_TABS.concat(['Countries', 'Wishlist', 'Mood', 'Medicines', 'Measures', 'HealthLog']);
 const OWN_ONLY_TABS = ['Wishlist', 'Mood', 'Medicines', 'Measures', 'HealthLog'];   // never shown to the other person, not even while sharing   // rows with an Owner: each link sees and changes only its own
-const EDITABLE_TABS = ['Dates', 'Transactions', 'Goals', 'Categories', 'Rules', 'Trips', 'TripItems', 'Balances', 'Lines', 'Recipes'].concat(PRIVATE_TABS, PERSONAL_TABS);
-const DELETABLE_TABS = ['Goals', 'Balances', 'ProjectLog', 'Countries', 'TripItems', 'Lines', 'Recipes'].concat(OWN_ONLY_TABS);   // rows you can remove from the app (everything else: delete in the Sheet)
+const EDITABLE_TABS = ['Dates', 'Transactions', 'Goals', 'Categories', 'Rules', 'Trips', 'TripItems', 'Balances', 'Lines', 'Recipes', 'Ideas'].concat(PRIVATE_TABS, PERSONAL_TABS);
+const DELETABLE_TABS = ['Goals', 'Balances', 'ProjectLog', 'Countries', 'TripItems', 'Lines', 'Recipes', 'Ideas'].concat(OWN_ONLY_TABS);   // rows you can remove from the app (everything else: delete in the Sheet)
 const BIG_PROJECT_TOOLS = 'time,money,journal,distance,tasks,parts';
-const DATE_COLS = ['Due', 'LastDone', 'Date', 'Started', 'PaidOn', 'Start', 'End', 'Updated', 'Added', 'WaitUntil', 'Decided', 'StockDate', 'TriedOn'];
-// The partner may change only their own evening-reminder settings and the shared recipe categories.
-const PARTNER_SETTINGS = ['PartnerMoodTime', 'PartnerMoodPush', 'PartnerMoodTags', 'RecipeCategories'];
+const DATE_COLS = ['Due', 'LastDone', 'Date', 'Started', 'PaidOn', 'Start', 'End', 'Updated', 'Added', 'WaitUntil', 'Decided', 'StockDate', 'TriedOn', 'DoneOn'];
+// The partner may change only their own evening-reminder settings and the categories of the shared recipe and idea lists.
+const PARTNER_SETTINGS = ['PartnerMoodTime', 'PartnerMoodPush', 'PartnerMoodTags', 'RecipeCategories', 'IdeaCategories'];
 // What identifies a row, per tab. Rows are addressed by their Sheet row number, which shifts when a row above is
 // deleted; before changing a row the server checks these columns still match what the phone saw (see rowFor_).
 const ROW_KEYS = {
@@ -85,7 +88,7 @@ const ROW_KEYS = {
   SrlMonths: ['Month'], SrlCosts: ['Date', 'Amount', 'Item'], Projects: ['Project', 'Owner'], Tasks: ['Project', 'Task'],
   Items: ['Project', 'Item'], ProjectLog: ['Date', 'Project', 'Type', 'Note'], Countries: ['Country', 'Owner'],
   Wishlist: ['Item', 'Added'], Mood: ['Date', 'Owner'], Medicines: ['Name', 'Owner'], Measures: ['Date', 'Kind', 'Value'],
-  HealthLog: ['Date', 'Title'], Lines: ['Line'], Recipes: ['Recipe', 'Added'],
+  HealthLog: ['Date', 'Title'], Lines: ['Line'], Recipes: ['Recipe', 'Added'], Ideas: ['Idea', 'Added'],
 };
 
 // ---------- Starter data (edit freely in the Sheet afterwards) ----------
@@ -326,7 +329,7 @@ function imports_() {
 }
 
 function upgrade_() {
-  if (prop_('SCHEMA') === '9c' && imports_().every(h => prop_('IMPORTED_' + h.id))) return;
+  if (prop_('SCHEMA') === '9e' && imports_().every(h => prop_('IMPORTED_' + h.id))) return;
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -379,6 +382,17 @@ function upgrade_() {
     if (prop_('SCHEMA') < '9c') {         // notes and lists
       ensureTabs_(ss_());
       setProp_('SCHEMA', '9c');
+    }
+    if (prop_('SCHEMA') < '9d') {         // project ideas, shared by both of you
+      ensureTabs_(ss_());
+      if (settings_().IdeaCategories === undefined) setSetting_('IdeaCategories', 'Home, Garden, Crafts, Tech, Outdoors');
+      setProp_('SCHEMA', '9d');
+    }
+    if (prop_('SCHEMA') < '9e') {         // an optional time on dates (appointments)
+      ensureTabs_(ss_());
+      const sh = sheet_('Dates'), j = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String).indexOf('Time');
+      if (j >= 0) sh.getRange(1, j + 1, sh.getMaxRows(), 1).setNumberFormat('@');   // stays text: the Sheet would turn 14:30 into a date
+      setProp_('SCHEMA', '9e');
     }
     imports_().filter(h => !prop_('IMPORTED_' + h.id)).forEach(h => {
       appendRows_('Transactions', h.transactions);
@@ -691,7 +705,7 @@ function api(key, action, data) {
         }
         sheet_(data.tab).deleteRow(data.row);
         return true;
-      case 'recipeCategory': return recipeCategory_(data.from, data.to);
+      case 'recipeCategory': return recipeCategory_(data.from, data.to, data.list);
       case 'renameCategory':
         if (who.role !== 'owner') throw new Error('Only the owner can rename categories');
         return renameCategory_(data.from, data.to);
@@ -1006,7 +1020,8 @@ function getData_(who) {
   out.lines = read_('Lines');
   out.notes = notesFor_(who);
   out.recipes = read_('Recipes');   // shared: both of you see and change the same list
-  out.push = Object.assign({ devices: subsOf_(who.role).length, last: pushLast_(who.role) }, moodPrefs_(who.role, s));
+  out.ideas = read_('Ideas');       // shared, like recipes
+  out.push = Object.assign({ devices: subsOf_(who.role).length, last: pushLast_(who.role), log: pushLog_(who.role) }, moodPrefs_(who.role, s));
   return out;
 }
 
@@ -1154,17 +1169,22 @@ function rate_(who, v) {
   return append_('Mood', row);
 }
 
-// Rename a recipe category (to = the new name) or remove it (to empty), in the list and on every recipe that has it.
-function recipeCategory_(from, to) {
+// Rename a category of a shared list (to = the new name) or remove it (to empty), in the setting and on every row that has it.
+// list = 'Recipes' (the default, as older pages send nothing) or 'Ideas'.
+const LIST_CATS = { Recipes: 'RecipeCategories', Ideas: 'IdeaCategories' };
+function recipeCategory_(from, to, tab) {
+  tab = tab || 'Recipes';
+  const key = LIST_CATS[tab];
+  if (!key) throw new Error('Unknown list');
   from = String(from || '').trim();
   to = String(to || '').replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
   const split = x => String(x || '').split(',').map(c => c.trim()).filter(Boolean);
-  const list = split(settings_().RecipeCategories);
+  const list = split(settings_()[key]);
   if (to && to !== from && list.includes(to)) throw new Error('That name is already used');
   const swap = a => a.map(c => c === from ? to : c).filter(Boolean);
-  read_('Recipes').filter(r => split(r.Categories).includes(from))
-    .forEach(r => update_('Recipes', r._row, { Categories: swap(split(r.Categories)).join(', ') }));
-  setSetting_('RecipeCategories', swap(list).join(', '));
+  read_(tab).filter(r => split(r.Categories).includes(from))
+    .forEach(r => update_(tab, r._row, { Categories: swap(split(r.Categories)).join(', ') }));
+  setSetting_(key, swap(list).join(', '));
   return true;
 }
 
@@ -1181,6 +1201,15 @@ function peek_(url) {
         const y = JSON.parse(r.getContentText());
         return { url: url, title: String(y.title || '').slice(0, 160), price: '', currency: '', shop: 'YouTube',
                  image: /^https:\/\//.test(y.thumbnail_url || '') ? String(y.thumbnail_url).slice(0, 500) : '' };
+      }
+    } catch (e) { /* fall through to reading the page */ }
+  }
+  if (/^https?:\/\/([a-z0-9-]+\.)?(reddit\.com|redd\.it)\//i.test(url)) {
+    try {
+      r = UrlFetchApp.fetch('https://www.reddit.com/oembed?url=' + encodeURIComponent(url), { muteHttpExceptions: true, headers: { 'User-Agent': 'SelfMate/1.0' } });
+      if (r.getResponseCode() === 200) {
+        const y = JSON.parse(r.getContentText());
+        if (y.title) return { url: url, title: String(y.title).slice(0, 160), price: '', currency: '', shop: 'Reddit', image: '' };
       }
     } catch (e) { /* fall through to reading the page */ }
   }
@@ -1366,15 +1395,21 @@ function syncOne_(r) {
     if (r.EventId) sheet_('Dates').getRange(r._row, col).setValue('');
     return;
   }
-  const day = parse_(r.Due);
+  const day = parse_(r.Due), hm = String(r.Time || '').match(/^(\d{1,2}):(\d{2})$/);
+  let start = null, end = null;
+  if (hm) { start = new Date(day); start.setHours(+hm[1], +hm[2], 0, 0); end = new Date(start.getTime() + 60 * 60000); }
+  // All day: 28 days (Google's max), 7 days and the day before. With a time: 7 days, 1 day and 2 hours before.
+  const remind = e => { e.removeAllReminders(); (start ? [10080, 1440, 120] : [40320, 10080, 900]).forEach(m => e.addPopupReminder(m)); };
   if (!ev) {
-    ev = cal.createAllDayEvent(r.Title, day);
-    ev.removeAllReminders();
-    [40320, 10080, 900].forEach(m => ev.addPopupReminder(m)); // 28 days (Google's max), 7 days, day before
+    ev = start ? cal.createEvent(r.Title, start, end) : cal.createAllDayEvent(r.Title, day);
+    remind(ev);
     sheet_('Dates').getRange(r._row, col).setValue(ev.getId());
   } else {
     if (ev.getTitle() !== r.Title) ev.setTitle(r.Title);
-    ev.setAllDayDate(day);
+    const wasAllDay = ev.isAllDayEvent();
+    if (start) { if (wasAllDay || ev.getStartTime().getTime() !== start.getTime()) ev.setTime(start, end); }
+    else ev.setAllDayDate(day);
+    if (wasAllDay !== !start) remind(ev);   // switched between all day and a set time
   }
 }
 function calendar_(propKey, name) {
@@ -1454,6 +1489,7 @@ function update_(name, row, obj) {
 
 function toCell_(h, v) {
   if (v == null) return '';
+  if (h === 'Time' && /^\d{1,2}:\d{2}$/.test(String(v))) return "'" + v;   // stays text, never a date
   if (DATE_COLS.includes(h) && /^\d{4}-\d{2}-\d{2}$/.test(String(v))) return parse_(v);
   return v;
 }

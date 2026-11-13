@@ -53,6 +53,7 @@
   @media (prefers-color-scheme: dark) { .btn { color: #14211A; } .btn.ghost { color: var(--leaf); } }
   .btn:disabled { opacity: .65; cursor: wait; }
   .btn.wide { width: 100%; } .btns { display: flex; gap: 8px; margin: 10px 0; } .btns .btn { flex: 1; }
+  .btns.wrap { flex-wrap: wrap; } .btns.wrap .btn { flex: 1 1 40%; }
   .done { width: 36px; height: 36px; border-radius: 50% 50% 50% 6px; background: var(--good-soft); color: var(--leaf); font-weight: 700; flex: none; }
   .alert { display: block; width: 100%; text-align: left; background: var(--warn-soft); color: var(--warn); font-weight: 600;
     border-radius: 6px 24px 6px 24px; padding: 13px 16px; margin: 12px 0; }
@@ -204,6 +205,8 @@
   .seg button { flex: 1; padding: 7px 0; border-radius: 13px; font-size: 13.5px; font-weight: 600; color: var(--muted); }
   .seg button.on { background: var(--card); color: var(--ink); }
   .seg.tight button { font-size: 12.5px; }
+  .seg.stack button { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 0 5px; min-width: 0; font-size: 11.5px; line-height: 1.2; white-space: nowrap; }
+  .seg.stack button span { font-size: 17px; line-height: 1.2; }
   .back { color: var(--leaf); font-weight: 600; padding: 6px 0; }
   .loading { text-align: center; padding: 60px 0; color: var(--muted); font-family: "Young Serif", serif; font-size: 18px; }
   .askbar { display: block; width: 100%; text-align: left; margin-top: 16px; padding: 13px 16px; border-radius: 99px; background: var(--card); border: 1px solid var(--line); color: var(--muted); }
@@ -336,9 +339,15 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const lei = n => Math.round(n || 0).toLocaleString('ro-RO') + ' lei';
 const todayISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+// The evening a mood rating belongs to: until 04:00 it is still last night, so rating after midnight doesn't count as the new day.
+const eveningISO = () => { const d = new Date(Date.now() - 4 * 36e5); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 const days = iso => Math.round((new Date(iso + 'T00:00:00') - new Date(todayISO() + 'T00:00:00')) / 864e5);
 const fmt = iso => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
 const isDone = d => d.LastDone && d.Due && d.LastDone >= d.Due && !(+d.RepeatMonths > 0);
+// A date's optional time (text like 14:30): shown after the day, and orders dates on the same day.
+const dTime = d => /^\d{1,2}:\d{2}$/.test(String(d.Time || '')) ? String(d.Time).padStart(5, '0') : '';
+const whenTxt = d => fmt(d.Due) + (dTime(d) ? ', ' + dTime(d) : '');
+const byDue = (a, b) => (a.Due + ' ' + dTime(a)) < (b.Due + ' ' + dTime(b)) ? -1 : 1;
 const sum = (a, f) => a.reduce((s, x) => s + (+f(x) || 0), 0);
 const yes = v => v === true || String(v).toLowerCase() === 'yes';
 const catOf = name => D.categories.find(c => c.Category === name) || { Type: 'flex', Emoji: '•', Group: 'Other' };
@@ -817,9 +826,9 @@ function checkinModal() {
       (uns.length > 15 ? `<p class="muted small">${uns.length - 15} more after these.</p>` : '')
       : '<p>✓ Everything has a category.</p>';
   } else if (st.key === 'ahead') {
-    const soon = D.dates.filter(d => d.Due && !isDone(d) && days(d.Due) <= 30).sort((a, b) => a.Due < b.Due ? -1 : 1);
+    const soon = D.dates.filter(d => d.Due && !isDone(d) && days(d.Due) <= 30).sort(byDue);
     body = soon.length ? '<p class="muted small">Already done? Tick it. Needs a step this week? Do it, or make it your plan in step 5.</p>' +
-      soon.map(d => `<div class="row"><div class="grow"><div>${esc(d.Title)}</div><div class="muted small">${fmt(d.Due)}${days(d.Due) < 0 ? ', late' : ''}${+d.Cost ? ', ' + lei(d.Cost) : ''}</div></div>
+      soon.map(d => `<div class="row"><div class="grow"><div>${esc(d.Title)}</div><div class="muted small">${whenTxt(d)}${days(d.Due) < 0 ? ', late' : ''}${+d.Cost ? ', ' + lei(d.Cost) : ''}</div></div>
         <button class="btn ghost" onclick="ciAgain(doneDate(${d._row}))">✓ Done</button></div>`).join('')
       : '<p>✓ Nothing due in the next 30 days.</p>';
   } else if (st.key === 'balances') {
@@ -894,7 +903,7 @@ function freshness(s) {
     + (nForeign ? `<div class="muted small">${nForeign} payment${nForeign > 1 ? 's' : ''} in another currency ${nForeign > 1 ? 'are' : 'is'} not counted yet: add the rate in ⚙️ Customise.</div>` : '');
 }
 function viewHome() {
-  const upcoming = D.dates.filter(d => d.Due && !isDone(d)).sort((a, b) => a.Due < b.Due ? -1 : 1);
+  const upcoming = D.dates.filter(d => d.Due && !isDone(d)).sort(byDue);
   const n = D.habit.n, watered = checkedThisWeek();
   return `
     <div class="label">${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
@@ -978,7 +987,7 @@ function dateRow(d) {
   const cls = n === null ? 'none' : n <= 7 ? 'soon' : n <= 30 ? 'near' : 'later';
   const num = n === null ? '+' : n === 0 ? '!' : Math.abs(n) > 99 ? Math.round(Math.abs(n) / 30) : Math.abs(n);
   const unit = n === null ? 'set date' : n === 0 ? 'today' : Math.abs(n) > 99 ? 'months' : n < 0 ? 'days late' : n === 1 ? 'day' : 'days';
-  const meta = [d.Due ? fmt(d.Due) : '', +d.Cost ? lei(d.Cost) : '', +d.RepeatMonths ? 'every ' + rep(+d.RepeatMonths) : ''].filter(Boolean).join(', ');
+  const meta = [d.Due ? whenTxt(d) : '', +d.Cost ? lei(d.Cost) : '', +d.RepeatMonths ? 'every ' + rep(+d.RepeatMonths) : ''].filter(Boolean).join(', ');
   return `<div class="ticket" onclick="dateModal(${d._row})"><div class="d ${cls}"><div><b>${num}</b><span>${unit}</span></div></div>
     <div class="t"><b>${AREA[d.Area] || '📌'} ${esc(d.Title)}</b><div>${meta || 'Tap to set a date'}</div></div>
     <div class="act">${d.Due && !isDone(d) ? `<button class="done" aria-label="Mark ${esc(d.Title)} done" onclick="event.stopPropagation();doneDate(${d._row})">✓</button>` : ''}</div></div>`;
@@ -990,7 +999,7 @@ async function doneDate(row) {
 function viewDates() {
   const area = SEG.area || 'All';
   const list = D.dates.filter(d => area === 'All' || d.Area === area);
-  const open = list.filter(d => d.Due && !isDone(d)).sort((a, b) => a.Due < b.Due ? -1 : 1);
+  const open = list.filter(d => d.Due && !isDone(d)).sort(byDue);
   const areas = ['All'].concat([...new Set(D.dates.map(d => d.Area))]);
   const sec = (title, rows) => rows.length ? `<h2>${title} (${rows.length})</h2>${rows.map(dateRow).join('')}` : '';
   const html = `
@@ -1010,7 +1019,8 @@ function dateModal(row, preset) {
   const reps = [[0, 'Does not repeat'], [1, 'Every month'], [3, 'Every 3 months'], [6, 'Every 6 months'], [12, 'Every year'], [24, 'Every 2 years'], [120, 'Every 10 years']];
   openModal(`<h3>${row ? 'Edit date' : 'New date'}</h3>
     <label>What</label><input id="dt" value="${esc(d.Title)}" placeholder="e.g. RCA renewal">
-    <label>Due date</label><input id="dd" type="date" value="${esc(d.Due)}">
+    <div class="inline"><div style="flex:3"><label>Due date</label><input id="dd" type="date" value="${esc(d.Due)}"></div>
+      <div style="flex:2"><label>Time (optional)</label><input id="dtm" type="time" value="${esc(dTime(d))}"></div></div>
     <label>Area</label><select id="da">${Object.keys(AREA).map(a => `<option ${a === d.Area ? 'selected' : ''}>${a}</option>`).join('')}</select>
     <label>Repeats</label><select id="dr">${reps.map(r => `<option value="${r[0]}" ${+d.RepeatMonths === r[0] ? 'selected' : ''}>${r[1]}</option>`).join('')}</select>
     <label>Cost (lei, optional: feeds the yearly-bills pot)</label><input id="dc" type="number" inputmode="decimal" value="${esc(d.Cost)}">
@@ -1021,6 +1031,7 @@ function dateModal(row, preset) {
 function saveDate(row) {
   const p = document.getElementById('dp');
   const v = { Title: val('dt'), Due: val('dd'), Area: val('da'), RepeatMonths: +val('dr'), Cost: val('dc') ? +val('dc') : '', Notes: val('dn') };
+  v.Time = v.Due ? val('dtm') : '';   // a time only means something with a day
   if (p) v.Private = p.checked ? 'yes' : '';
   if (!v.Title) return toast('Give it a name');
   row ? upd('Dates', row, v, 'Saved ✓') : add('Dates', v);
@@ -2087,7 +2098,7 @@ function viewSrl() {
   const pct = +D.settings.SrlTaxPotPct || 0;
   const unpaid = D.invoices.filter(i => !i.PaidOn);
   const srlDates = D.dates.filter(d => d.Private === 'yes');
-  const open = srlDates.filter(d => d.Due && !isDone(d)).sort((a, b) => a.Due < b.Due ? -1 : 1);
+  const open = srlDates.filter(d => d.Due && !isDone(d)).sort(byDue);
   const qs = [1, 2, 3, 4].map(q => sum(inv.filter(i => Math.ceil(+String(i.Date).slice(5, 7) / 3) === q), i => i.Amount));
   const qmax = Math.max(1, ...qs);
   return `
@@ -3016,7 +3027,7 @@ function wishModal(row, pre) {
     ${row ? `<label>Status</label><select id="wst">${[['waiting', 'Still waiting / deciding'], ['bought', 'Bought'], ['dropped', 'Let go']].map(o => `<option value="${o[0]}" ${o[0] === (w.Status || 'waiting') ? 'selected' : ''}>${o[1]}</option>`).join('')}</select>` : ''}
     <div class="btns"><button class="btn" onclick="saveWish(${row || 0})">${row ? 'Save' : 'Let it wait 🌱'}</button>
       ${row ? `<button class="btn ghost" onclick="if(confirm('Remove this from the wishlist?'))act('deleteRow',{tab:'Wishlist',row:${row}},'Removed')">Remove</button>` : ''}</div>
-    ${w._shared ? `<div class="btns"><button class="btn ghost" onclick="swapShared('recipes')">🍳 It's a recipe</button><button class="btn ghost" onclick="swapShared('note')">📝 It's a note</button></div>` : ''}`);
+    ${w._shared ? sharedSwaps('wish') : ''}`);
   if (!row && w.Link && !w.Price) fillFromLink();
 }
 async function fillFromLink() {
@@ -3077,65 +3088,92 @@ async function saveWishRules() {
   for (const p of pairs) await call('setSetting', { key: p[0], value: p[1] });
   toast('Saved ✓'); await load();
 }
-// Text shared from another app ("Rain jacket https://shop.ro/...") → a filled-in recipe or wish, going by the site.
-// One tap in the form switches to the other, in case the guess is wrong.
+// Text shared from another app ("Rain jacket https://shop.ro/...") → a filled-in recipe, project idea or wish, going by the site.
+// Video and social sites can hold either a recipe or a project idea, so SelfMate asks; shop links go straight to the wishlist.
+// Every form opened from a share has one-tap buttons to move it somewhere else, in case the guess is wrong.
 let SHARED = null;
-const RECIPE_SITES = /^https?:\/\/([a-z0-9-]+\.)*(youtube\.com|youtu\.be|instagram\.com|facebook\.com|fb\.com|fb\.watch|tiktok\.com|pinterest\.[a-z.]+|pin\.it)(\/|$)/i;
+const SOCIAL_SITES = /^https?:\/\/([a-z0-9-]+\.)*(youtube\.com|youtu\.be|instagram\.com|facebook\.com|fb\.com|fb\.watch|tiktok\.com|pinterest\.[a-z.]+|pin\.it|reddit\.com|redd\.it)(\/|$)/i;
 function sharedLink(text) {
   const url = (String(text).match(/https?:\/\/[^\s"'<>]+/) || [''])[0];
   const name = String(text).replace(url, '').replace(/\s+/g, ' ').replace(/^["'«“]|["'»”]$/g, '').trim().slice(0, 160);
   SHARED = { url, name };
   if (!url) return sharedNote(String(text).trim());   // no link in it: an idea, a list, a piece of text
-  const to = RECIPE_SITES.test(url) ? 'recipes' : 'wish';
-  SEG.me = to; go('me');
-  openShared(to);
+  if (SOCIAL_SITES.test(url)) { go('me'); return askShared(); }
+  SEG.me = 'wish'; go('me');
+  openShared('wish');
 }
+const SHARE_TO = [['recipes', '🍳 A recipe', "🍳 It's a recipe"], ['ideas', '💡 A project idea', "💡 It's a project idea"],
+  ['wish', '🛍️ Something to buy', "🛍️ It's something to buy"], ['note', '📝 A note', "📝 It's a note"]];
+function askShared() {
+  openModal(`<h3>Where should this go?</h3>
+    <p class="muted small">${esc(SHARED.name || listSource(SHARED.url))}</p>
+    ${SHARE_TO.map(x => `<div class="btns"><button class="btn ${x[0] === 'recipes' || x[0] === 'ideas' ? '' : 'ghost'}" onclick="swapShared('${x[0]}')">${x[1]}</button></div>`).join('')}`);
+}
+// The buttons under a shared form: every other place it could go.
+const sharedSwaps = here => `<div class="btns wrap">${SHARE_TO.filter(x => x[0] !== here)
+  .map(x => `<button class="btn ghost" onclick="swapShared('${x[0]}')">${x[2]}</button>`).join('')}</div>`;
 function openShared(to) {
-  if (to === 'recipes') recipeModal(0, { Link: SHARED.url, Recipe: SHARED.name, _shared: true });
+  if (LISTS[to]) listModal(to, 0, { Link: SHARED.url, [LISTS[to].col]: SHARED.name, _shared: true });
   else wishModal(0, { Link: SHARED.url, Item: SHARED.name, _shared: true });
 }
 function swapShared(to) {
   if (to === 'note') { SEG.nv = 'all'; TAB = 'notes'; SUB = null; render(); return sharedNote((SHARED.name + ' ' + SHARED.url).trim(), SHARED.url, true); }
-  SEG.me = to; render(); openShared(to);
+  SEG.me = to; TAB = 'me'; SUB = null; render(); openShared(to);
 }
 
-// ---------- RECIPES (inside Me): ideas to try later, one list shared by both of you ----------
+// ---------- SAVED-FOR-LATER LISTS (inside Me): Recipes and Project ideas, each one list shared by both of you ----------
+// Both work the same way; only the words, the Sheet tab and the category setting differ.
+// Status: empty = still to do | the list's own "done" word. Categories come from the list's setting (comma separated).
+const LISTS = {
+  recipes: { tab: 'Recipes', col: 'Recipe', setting: 'RecipeCategories', cats: 'Breakfast, Lunch, Sweets, High protein, Charcuterie',
+    icon: '🍳', title: 'Recipes', one: 'recipe', a: 'a recipe', what: 'e.g. Protein pancakes', newCat: 'e.g. Soups',
+    done: 'tried', doneCol: 'TriedOn', todoH: 'To try', doneH: 'Tried', doneBtn: '✓ Tried it', doneWord: 'Tried',
+    how: 'How was it?', howPh: 'e.g. Good, less sugar next time', doneToast: 'Marked as tried ✓', saved: 'Saved for later 🍳' },
+  ideas: { tab: 'Ideas', col: 'Idea', setting: 'IdeaCategories', cats: 'Home, Garden, Crafts, Tech, Outdoors',
+    icon: '💡', title: 'Project ideas', one: 'project idea', a: 'an idea', what: 'e.g. Bench from old pallets', newCat: 'e.g. Woodwork',
+    done: 'done', doneCol: 'DoneOn', todoH: 'Someday', doneH: 'Done', doneBtn: '✓ Did it', doneWord: 'Done',
+    how: 'How did it go?', howPh: 'e.g. Took two weekends, worth it', doneToast: 'Marked as done ✓', saved: 'Saved for later 💡' },
+};
 const recipes = () => D.recipes || [];
+const listRows = k => D[k] || [];
 const splitCats = s => String(s == null ? '' : s).split(',').map(x => x.trim()).filter(Boolean);
-const recCats = () => splitCats(D.settings.RecipeCategories === undefined ? 'Breakfast, Lunch, Sweets, High protein, Charcuterie' : D.settings.RecipeCategories);
-const recSource = link => {
-  const host = String(link || '').replace(/^https?:\/\/(www\.|m\.)?/i, '').split(/[/?#]/)[0].toLowerCase();
-  const known = [[/youtu/, 'YouTube'], [/instagram/, 'Instagram'], [/^(facebook|fb)\./, 'Facebook'], [/tiktok/, 'TikTok'], [/^(pinterest|pin\.it)/, 'Pinterest']];
-  const hit = known.find(k => k[0].test(host));
+const listCats = k => splitCats(D.settings[LISTS[k].setting] === undefined ? LISTS[k].cats : D.settings[LISTS[k].setting]);
+const listSource = link => {
+  const host = String(link || '').replace(/^https?:\/\/(www\.|m\.|old\.)?/i, '').split(/[/?#]/)[0].toLowerCase();
+  const known = [[/youtu/, 'YouTube'], [/instagram/, 'Instagram'], [/^(facebook|fb)\./, 'Facebook'], [/tiktok/, 'TikTok'],
+    [/^(pinterest|pin\.it)/, 'Pinterest'], [/^(reddit\.com|redd\.it)/, 'Reddit']];
+  const hit = known.find(x => x[0].test(host));
   return hit ? hit[1] : host;
 };
-function recipeCard(r) {
-  const tried = r.Status === 'tried', link = /^https?:\/\//i.test(r.Link || '') ? r.Link : '';
-  const pic = r.Image ? `<img class="wpic" src="${esc(r.Image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML='<span class=&quot;wpic&quot;>🍳</span>'">` : '<span class="wpic">🍳</span>';
-  return `<div class="card wish recipe ${tried ? 'tried' : ''}"><div class="wtop" onclick="recipeModal(${r._row})">${pic}
-      <div class="grow"><b>${esc(r.Recipe)}</b><div class="muted small">${esc(splitCats(r.Categories).join(' · ')) || 'No category'}</div>
-      ${r.Notes ? `<div class="small">${esc(r.Notes)}</div>` : ''}${tried && r.TriedOn ? `<div class="muted small">Tried ${fmt(r.TriedOn)}</div>` : ''}</div></div>
-    <div class="acts">${link ? `<a class="small" href="${esc(link)}" target="_blank" rel="noopener">Open on ${esc(recSource(link))} ↗</a>` : '<span></span>'}
-      ${tried ? '' : `<button class="chip" onclick="triedModal(${r._row})">✓ Tried it</button>`}</div></div>`;
+function listCard(k, r) {
+  const L = LISTS[k], done = r.Status === L.done, link = /^https?:\/\//i.test(r.Link || '') ? r.Link : '';
+  const pic = r.Image ? `<img class="wpic" src="${esc(r.Image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML='<span class=&quot;wpic&quot;>${L.icon}</span>'">` : `<span class="wpic">${L.icon}</span>`;
+  return `<div class="card wish recipe ${done ? 'tried' : ''}"><div class="wtop" onclick="listModal('${k}',${r._row})">${pic}
+      <div class="grow"><b>${esc(r[L.col])}</b><div class="muted small">${esc(splitCats(r.Categories).join(' · ')) || 'No category'}</div>
+      ${r.Notes ? `<div class="small">${esc(r.Notes)}</div>` : ''}${done && r[L.doneCol] ? `<div class="muted small">${L.doneWord} ${fmt(r[L.doneCol])}</div>` : ''}</div></div>
+    <div class="acts">${link ? `<a class="small" href="${esc(link)}" target="_blank" rel="noopener">Open on ${esc(listSource(link))} ↗</a>` : '<span></span>'}
+      ${done ? '' : `<button class="chip" onclick="doneModal('${k}',${r._row})">${L.doneBtn}</button>`}</div></div>`;
 }
-function viewRecipes() {
-  const all = recipes(), cats = recCats(), none = all.filter(r => !splitCats(r.Categories).length).length;
-  if (SEG.recipe && SEG.recipe !== '-' && !cats.includes(SEG.recipe)) SEG.recipe = '';
-  const f = SEG.recipe || '', hit = r => !f || (f === '-' ? !splitCats(r.Categories).length : splitCats(r.Categories).includes(f));
+SEG.list = SEG.list || {};   // the category filter each list was left on
+function viewList(k) {
+  const L = LISTS[k], all = listRows(k), cats = listCats(k), none = all.filter(r => !splitCats(r.Categories).length).length;
+  let f = SEG.list[k] || '';
+  if (f && f !== '-' && !cats.includes(f)) f = SEG.list[k] = '';
+  const hit = r => !f || (f === '-' ? !splitCats(r.Categories).length : splitCats(r.Categories).includes(f));
   const newest = (a, b) => String(a.Added) < String(b.Added) ? 1 : String(a.Added) > String(b.Added) ? -1 : b._row - a._row;
-  const list = all.filter(hit).sort(newest), toTry = list.filter(r => r.Status !== 'tried'), tried = list.filter(r => r.Status === 'tried');
+  const list = all.filter(hit).sort(newest), todo = list.filter(r => r.Status !== L.done), done = list.filter(r => r.Status === L.done);
   const n = c => all.filter(r => splitCats(r.Categories).includes(c)).length;
-  const chip = (on, i, label, count) => `<button class="chip ${on ? 'on' : ''}" onclick="recFilter(${i})">${esc(label)}${count ? ' · ' + count : ''}</button>`;
-  return `<div class="btns"><button class="btn" onclick="recipeModal(0)">+ Add a recipe</button><button class="btn ghost" style="flex:none" onclick="recipeCatsModal()" aria-label="Categories">⚙️</button></div>
-    <p class="muted small">Tip: in YouTube, Instagram or Facebook tap <b>Share → SelfMate</b> (needs the 🌱 home-screen app), or paste the link here.</p>
+  const chip = (on, i, label, count) => `<button class="chip ${on ? 'on' : ''}" onclick="listFilter('${k}',${i})">${esc(label)}${count ? ' · ' + count : ''}</button>`;
+  return `<div class="btns"><button class="btn" onclick="listModal('${k}',0)">+ Add ${L.a}</button><button class="btn ghost" style="flex:none" onclick="listCatsModal('${k}')" aria-label="Categories">⚙️</button></div>
+    <p class="muted small">Tip: in YouTube, Reddit, Instagram or Facebook tap <b>Share → SelfMate</b> (needs the 🌱 home-screen app), or paste the link here.</p>
     <div class="chips">${chip(!f, -1, 'All', all.length)}${cats.map((c, i) => chip(f === c, i, c, n(c))).join('')}${none ? chip(f === '-', -2, 'No category', none) : ''}</div>
-    ${toTry.length ? `<h2>To try (${toTry.length})</h2>${toTry.map(recipeCard).join('')}` : ''}
-    ${tried.length ? `<h2>Tried (${tried.length})</h2>${tried.map(recipeCard).join('')}` : ''}
-    ${list.length ? '' : `<p class="muted">${f ? 'Nothing here yet.' : 'No recipes yet. 🌿'}</p>`}`;
+    ${todo.length ? `<h2>${L.todoH} (${todo.length})</h2>${todo.map(r => listCard(k, r)).join('')}` : ''}
+    ${done.length ? `<h2>${L.doneH} (${done.length})</h2>${done.map(r => listCard(k, r)).join('')}` : ''}
+    ${list.length ? '' : `<p class="muted">${f ? 'Nothing here yet.' : `No ${L.one}s yet. 🌿`}</p>`}`;
 }
-function recFilter(i) { SEG.recipe = i === -1 ? '' : i === -2 ? '-' : recCats()[i]; render(); }
+function listFilter(k, i) { SEG.list[k] = i === -1 ? '' : i === -2 ? '-' : listCats(k)[i]; render(); }
 
-let RIMG = '', RPICK = [], RLIST = [];   // while the form is open: its picture, chosen categories, and the categories on offer
+let RK = 'recipes', RIMG = '', RPICK = [], RLIST = [];   // while the form is open: which list, its picture, chosen categories, categories on offer
 const recChips = () => RLIST.map((c, i) => `<button class="chip ${RPICK.includes(c) ? 'on' : ''}" onclick="recPick(${i})">${esc(c)}</button>`).join('');
 function recPick(i) {
   const c = RLIST[i];
@@ -3143,27 +3181,29 @@ function recPick(i) {
   $('#rcats').innerHTML = recChips();
 }
 const recPicHtml = () => RIMG ? `<img class="wbig" src="${esc(RIMG)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : '';
-function recipeModal(row, pre) {
-  const r = row ? recipes().find(x => x._row === row) : Object.assign({}, pre || {});
+function listModal(k, row, pre) {
+  const L = LISTS[k], r = row ? listRows(k).find(x => x._row === row) : Object.assign({}, pre || {});
   if (!r) return;
-  RIMG = r.Image || '';
+  RK = k; RIMG = r.Image || '';
   RPICK = splitCats(r.Categories);
-  if (!row && !pre && SEG.recipe && SEG.recipe !== '-') RPICK = [SEG.recipe];   // adding while looking at a category
-  RLIST = recCats().concat(RPICK.filter(c => !recCats().includes(c)));
-  openModal(`<h3>${row ? 'Edit recipe' : 'Add a recipe'}</h3>
+  const f = SEG.list[k];
+  if (!row && !pre && f && f !== '-') RPICK = [f];   // adding while looking at a category
+  RLIST = listCats(k).concat(RPICK.filter(c => !listCats(k).includes(c)));
+  openModal(`<h3>${row ? 'Edit ' + L.one : 'Add ' + L.a}</h3>
     <div id="rpv">${recPicHtml()}</div>
     <label>Link (optional)</label><div class="inline"><input id="rl" type="url" inputmode="url" value="${esc(r.Link)}" placeholder="https://…">
       <button class="btn ghost" id="rfill" onclick="fillRecipe()">Fill in</button></div>
-    <label>What is it</label><input id="rn" value="${esc(r.Recipe)}" placeholder="e.g. Protein pancakes">
+    <label>What is it</label><input id="rn" value="${esc(r[L.col])}" placeholder="${esc(L.what)}">
     <label>Categories (as many as fit)</label><div class="chips" id="rcats">${recChips()}</div>
-    <label>New category (optional)</label><input id="rnew" placeholder="e.g. Soups">
+    <label>New category (optional)</label><input id="rnew" placeholder="${esc(L.newCat)}">
     <label>Note (optional)</label><input id="rnote" value="${esc(r.Notes)}">
-    ${row ? `<label>Status</label><select id="rst"><option value="">To try</option><option value="tried" ${r.Status === 'tried' ? 'selected' : ''}>Tried</option></select>` : ''}
-    <div class="btns"><button class="btn" id="rsave" onclick="saveRecipe(${row || 0})">Save</button>
-      ${row ? `<button class="btn ghost" onclick="removeRecipe(${row})">Remove</button>` : ''}</div>
-    ${r._shared ? `<div class="btns"><button class="btn ghost" onclick="swapShared('wish')">🛍️ It's something to buy</button><button class="btn ghost" onclick="swapShared('note')">📝 It's a note</button></div>` : ''}`);
+    ${row ? `<label>Status</label><select id="rst"><option value="">${L.todoH}</option><option value="${L.done}" ${r.Status === L.done ? 'selected' : ''}>${L.doneH}</option></select>` : ''}
+    <div class="btns"><button class="btn" id="rsave" onclick="saveListItem(${row || 0})">Save</button>
+      ${row ? `<button class="btn ghost" onclick="removeListItem('${k}',${row})">Remove</button>` : ''}</div>
+    ${r._shared ? sharedSwaps(k) : ''}`);
   if (!row && r.Link) fillRecipe();
 }
+const recipeModal = (row, pre) => listModal('recipes', row, pre);
 async function fillRecipe() {
   const url = val('rl'), btn = $('#rfill');
   if (!url) return toast('Paste a link first');
@@ -3171,74 +3211,77 @@ async function fillRecipe() {
   const r = await call('peek', { url }).catch(() => null);
   if (btn) { btn.disabled = false; btn.textContent = 'Fill in'; }
   if (!r || !$('#rn')) return;
-  // Instagram and Facebook answer outside readers with a sign-in page, so their "title" is not the recipe's name.
-  const junk = /^(instagram|facebook|youtube|tiktok|pinterest)$|^(log ?in|sign ?in|error|page not found)\b|log ?in (to|or|into)\b/i;
+  // Instagram, Facebook and Reddit can answer outside readers with a sign-in or block page, so that "title" is not the real name.
+  const junk = /^(instagram|facebook|youtube|tiktok|pinterest|reddit)$|^\[(deleted|removed)( by user)?\]|^(log ?in|sign ?in|error|page not found|blocked|whoa there)\b|log ?in (to|or|into)\b|^reddit - /i;
   const title = r.title && !junk.test(r.title) ? r.title : '';
   if (title && (!val('rn') || val('rn').length < 4 || /https?:/.test(val('rn')))) $('#rn').value = title;
-  // Pictures from these two come with a link that stops working after a while, so they aren't kept.
-  if (r.image && !/cdninstagram|fbcdn/i.test(r.image)) { RIMG = r.image; $('#rpv').innerHTML = recPicHtml(); }
-  if (!title && !val('rn')) toast(recSource(url) + ' did not say the name. Type a few words, or just save.');
+  // Pictures from these come with a link that stops working after a while, so they aren't kept.
+  if (r.image && !/cdninstagram|fbcdn|redditmedia|redd\.it/i.test(r.image)) { RIMG = r.image; $('#rpv').innerHTML = recPicHtml(); }
+  if (!title && !val('rn')) toast(listSource(url) + ' did not say the name. Type a few words, or just save.');
 }
-async function saveRecipe(row) {
-  const link = val('rl');
-  const typed = splitCats(val('rnew')), fresh = typed.filter(c => !recCats().includes(c));
+async function saveListItem(row) {
+  const k = RK, L = LISTS[k], link = val('rl');
+  const typed = splitCats(val('rnew')), fresh = typed.filter(c => !listCats(k).includes(c));
   const picked = RPICK.concat(typed.filter(c => !RPICK.includes(c)));
-  const v = { Recipe: val('rn') || (link ? 'Idea from ' + recSource(link) : ''), Link: link, Image: RIMG, Categories: picked.join(', '), Notes: val('rnote') };
-  if (!v.Recipe) return toast('What is it?');
-  if (!row && link && recipes().some(r => r.Link === link)) return toast('⚠️ This link is already in your recipes');
+  const v = { [L.col]: val('rn') || (link ? 'Idea from ' + listSource(link) : ''), Link: link, Image: RIMG, Categories: picked.join(', '), Notes: val('rnote') };
+  if (!v[L.col]) return toast('What is it?');
+  if (!row && link && listRows(k).some(r => r.Link === link)) return toast(`⚠️ This link is already in your ${L.title.toLowerCase()}`);
   if (fresh.length) {   // the new category first, so the reload after saving already knows it
     const btn = $('#rsave'); if (btn) btn.disabled = true;
-    const list = recCats().concat(fresh).join(', ');
-    const ok = await call('setSetting', { key: 'RecipeCategories', value: list }).then(() => true).catch(() => false);
+    const list = listCats(k).concat(fresh).join(', ');
+    const ok = await call('setSetting', { key: L.setting, value: list }).then(() => true).catch(() => false);
     if (btn) btn.disabled = false;
     if (!ok) return;
-    D.settings.RecipeCategories = list;
+    D.settings[L.setting] = list;
   }
-  if (!row) return add('Recipes', Object.assign(v, { Added: todayISO(), Status: '' }), 'Saved for later 🍳');
+  if (!row) return add(L.tab, Object.assign(v, { Added: todayISO(), Status: '' }), L.saved);
   v.Status = val('rst');
-  const old = recipes().find(x => x._row === row);
-  v.TriedOn = v.Status === 'tried' ? (old && old.TriedOn) || todayISO() : '';
-  upd('Recipes', row, v, 'Saved ✓');
+  const old = listRows(k).find(x => x._row === row);
+  v[L.doneCol] = v.Status === L.done ? (old && old[L.doneCol]) || todayISO() : '';
+  upd(L.tab, row, v, 'Saved ✓');
 }
-function removeRecipe(row) { if (confirm('Remove this recipe for both of you?')) act('deleteRow', { tab: 'Recipes', row }, 'Removed'); }
-function triedModal(row) {
-  const r = recipes().find(x => x._row === row);
+function removeListItem(k, row) { if (confirm(`Remove this ${LISTS[k].one} for both of you?`)) act('deleteRow', { tab: LISTS[k].tab, row }, 'Removed'); }
+function doneModal(k, row) {
+  const L = LISTS[k], r = listRows(k).find(x => x._row === row);
   if (!r) return;
-  openModal(`<h3>✓ ${esc(r.Recipe)}</h3>
-    <label>How was it? (optional)</label><input id="rtn" value="${esc(r.Notes)}" placeholder="e.g. Good, less sugar next time">
-    <div class="btns"><button class="btn" onclick="upd('Recipes',${row},{Status:'tried',TriedOn:todayISO(),Notes:val('rtn')},'Marked as tried ✓')">Save</button></div>`);
+  RK = k;
+  openModal(`<h3>✓ ${esc(r[L.col])}</h3>
+    <label>${L.how} (optional)</label><input id="rtn" value="${esc(r.Notes)}" placeholder="${esc(L.howPh)}">
+    <div class="btns"><button class="btn" onclick="markListDone(${row})">Save</button></div>`);
 }
-function recipeCatsModal() {
-  const cats = recCats(), n = c => recipes().filter(r => splitCats(r.Categories).includes(c)).length;
-  openModal(`<h3>Recipe categories</h3>
+function markListDone(row) { const L = LISTS[RK]; upd(L.tab, row, { Status: L.done, [L.doneCol]: todayISO(), Notes: val('rtn') }, L.doneToast); }
+function listCatsModal(k) {
+  const L = LISTS[k], cats = listCats(k), n = c => listRows(k).filter(r => splitCats(r.Categories).includes(c)).length;
+  RK = k;
+  openModal(`<h3>${L.title}: categories</h3>
     ${cats.map((c, i) => `<div class="row" onclick="recCatModal(${i})"><div class="grow">${esc(c)}</div><span class="muted small">${n(c)}</span></div>`).join('') || '<p class="muted">No categories yet.</p>'}
-    <label>Add a category</label><div class="inline"><input id="rca" placeholder="e.g. Soups"><button class="btn ghost" onclick="addRecCat()">Add</button></div>
+    <label>Add a category</label><div class="inline"><input id="rca" placeholder="${esc(L.newCat)}"><button class="btn ghost" onclick="addRecCat()">Add</button></div>
     <p class="muted small">Tap one to rename or remove it. You share these with ${D.role === 'owner' ? 'your partner' : 'the owner'}.</p>`);
 }
 function addRecCat() {
-  const fresh = splitCats(val('rca')).filter(c => !recCats().includes(c));
+  const L = LISTS[RK], fresh = splitCats(val('rca')).filter(c => !listCats(RK).includes(c));
   if (!fresh.length) return toast(val('rca') ? 'You already have that one' : 'Type a name first');
-  const value = recCats().concat(fresh).join(', ');
-  D.settings.RecipeCategories = value;
-  act('setSetting', { key: 'RecipeCategories', value }, 'Added ✓');
+  const value = listCats(RK).concat(fresh).join(', ');
+  D.settings[L.setting] = value;
+  act('setSetting', { key: L.setting, value }, 'Added ✓');
 }
 function recCatModal(i) {
-  const c = recCats()[i];
+  const c = listCats(RK)[i];
   openModal(`<h3>${esc(c)}</h3><label>Name</label><input id="rcn" value="${esc(c)}">
     <div class="btns"><button class="btn" onclick="renameRecCat(${i})">Save</button><button class="btn ghost" onclick="removeRecCat(${i})">Remove</button></div>`);
 }
 function renameRecCat(i) {
-  const from = recCats()[i], to = val('rcn').replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+  const from = listCats(RK)[i], to = val('rcn').replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
   if (!to) return toast('Give it a name');
   if (to === from) return closeModal();
-  if (recCats().includes(to)) return toast('You already have that one');
-  if (SEG.recipe === from) SEG.recipe = to;
-  act('recipeCategory', { from, to }, 'Renamed ✓');
+  if (listCats(RK).includes(to)) return toast('You already have that one');
+  if (SEG.list[RK] === from) SEG.list[RK] = to;
+  act('recipeCategory', { list: LISTS[RK].tab, from, to }, 'Renamed ✓');
 }
 function removeRecCat(i) {
-  const from = recCats()[i], n = recipes().filter(r => splitCats(r.Categories).includes(from)).length;
-  if (!confirm(n ? `Remove "${from}"? Its ${n} recipe${n === 1 ? '' : 's'} stay, just without this category.` : `Remove "${from}"?`)) return;
-  act('recipeCategory', { from, to: '' }, 'Removed');
+  const L = LISTS[RK], from = listCats(RK)[i], n = listRows(RK).filter(r => splitCats(r.Categories).includes(from)).length;
+  if (!confirm(n ? `Remove "${from}"? Its ${n} ${L.one}${n === 1 ? '' : 's'} stay, just without this category.` : `Remove "${from}"?`)) return;
+  act('recipeCategory', { list: L.tab, from, to: '' }, 'Removed');
 }
 
 // ---------- ME: mood & energy, health, wishlist (personal: only you ever see yours) ----------
@@ -3256,24 +3299,25 @@ const isoBack = n => plusDays(-n);
 function viewMe() {
   const seg = SEG.me || 'mood', ready = wishes().filter(isReady).length;
   return `<div class="label">${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
-    <h1>${seg === 'wish' ? 'Wishlist' : seg === 'recipes' ? 'Recipes' : "How you're doing"}</h1>
-    <div class="seg tight">${[['mood', '🌙 Mood'], ['health', '🩺 Health'], ['wish', '🛍️ Wishes' + (ready ? ' · ' + ready : '')], ['recipes', '🍳 Recipes']].map(x => `<button class="${x[0] === seg ? 'on' : ''}" onclick="SEG.me='${x[0]}';render()">${x[1]}</button>`).join('')}</div>
-    ${seg === 'wish' ? viewWish() : seg === 'recipes' ? viewRecipes() : seg === 'mood' ? viewMood() : viewHealth()}
-    <p class="muted small" style="margin-top:24px">${seg === 'recipes' ? `🤝 You share this list with ${D.role === 'owner' ? 'your partner' : 'the owner'}.` : `🔒 Only you see this page. It is never shown to ${D.role === 'owner' ? 'your partner' : 'the owner'}, not even while sharing.`}</p>`;
+    <h1>${seg === 'wish' ? 'Wishlist' : LISTS[seg] ? LISTS[seg].title : "How you're doing"}</h1>
+    <div class="seg tight stack">${[['mood', '🌙', 'Mood'], ['health', '🩺', 'Health'], ['wish', '🛍️', 'Wishes' + (ready ? ' · ' + ready : '')], ['recipes', '🍳', 'Recipes'], ['ideas', '💡', 'Ideas']]
+      .map(x => `<button class="${x[0] === seg ? 'on' : ''}" onclick="SEG.me='${x[0]}';render()"><span>${x[1]}</span>${x[2]}</button>`).join('')}</div>
+    ${seg === 'wish' ? viewWish() : LISTS[seg] ? viewList(seg) : seg === 'mood' ? viewMood() : viewHealth()}
+    <p class="muted small" style="margin-top:24px">${LISTS[seg] ?`🤝 You share this list with ${D.role === 'owner' ? 'your partner' : 'the owner'}.` : `🔒 Only you see this page. It is never shown to ${D.role === 'owner' ? 'your partner' : 'the owner'}, not even while sharing.`}</p>`;
 }
 
 // One quick evening rating: mood and energy (the two main dimensions of how we feel, Russell 1980 / the Affect Grid,
 // Russell, Weiss & Mendelsohn 1989) and last night's sleep on 0–10 (like the Single-Item Sleep Quality Scale, Snyder 2018).
 function viewMood() {
-  const t = moodOn(todayISO()), list = moods(), p = D.push || {};
+  const t = moodOn(eveningISO()), list = moods(), p = D.push || {};
   const line = tonightLine();
   const today = t
-    ? `<div class="dusk" onclick="rateModal('${todayISO()}')"><div class="moon"></div><div class="label" style="color:inherit;opacity:.8">Today</div>
+    ? `<div class="dusk" onclick="rateModal('${eveningISO()}')"><div class="moon"></div><div class="label" style="color:inherit;opacity:.8">Today</div>
         <div class="faces">${MOODS[t.Mood - 1][0]} <span>${MOODS[t.Mood - 1][1]} mood</span> · ${ENERGY[t.Energy - 1][0]} <span>${ENERGY[t.Energy - 1][1]} energy</span></div>
         ${line ? `<p class="quote">“${esc(line)}”</p>` : ''}<div class="small" style="opacity:.75">Tap to change</div></div>`
     : `<div class="dusk"><div class="moon"></div><div class="label" style="color:inherit;opacity:.8">Tonight</div>
         <div class="serif" style="font-size:24px;line-height:1.2;margin:4px 0 10px">How was your day?</div>
-        <button class="btn" style="background:#F6E7A8;color:#1D2A44" onclick="rateModal('${todayISO()}')">Rate my day · 20 seconds</button></div>`;
+        <button class="btn" style="background:#F6E7A8;color:#1D2A44" onclick="rateModal('${eveningISO()}')">Rate my day · 20 seconds</button></div>`;
   const reminder = `<div class="row" onclick="moodSettingsModal()"><span class="emo">🔔</span><div class="grow"><div>Evening reminder ${p.on === false ? 'off' : 'at ' + esc(p.time || '21:00')}</div>
     <div class="muted small">${p.devices ? p.devices + ' phone' + (p.devices > 1 ? 's' : '') + ' get it' : 'Not on any phone yet. Tap to turn it on.'}</div></div><span class="muted">›</span></div>`;
   if (list.length < 2) return today + reminder + `<h2>What you'll see here</h2><div class="card small muted">After a few evenings: your mood, energy and sleep over the last month,
@@ -3300,11 +3344,11 @@ function rateModal(day) {
   const scale = (key, opts) => `<div class="scale" id="sc_${key}">${opts.map((o, i) => `<button class="sc ${RATE[key] === i + 1 ? 'on' : ''}" style="--c:var(--m${i + 1})"
       onclick="RATE.${key}=${i + 1};markScale('${key}')"><span>${o[0]}</span>${o[1]}</button>`).join('')}</div>`;
   const tags = [...new Set(moodTags().concat([...RATE.tags]))];
-  openModal(`<div class="dusk mini"><div class="moon"></div><div class="label" style="color:inherit;opacity:.85">${day === todayISO() ? 'Tonight' : fmt(day)}</div>
+  openModal(`<div class="dusk mini"><div class="moon"></div><div class="label" style="color:inherit;opacity:.85">${day === eveningISO() ? 'Tonight' : fmt(day)}</div>
       <div class="serif" style="font-size:22px">How was your day?</div></div>
     <label>Mood</label>${scale('Mood', MOODS)}
     <label>Energy</label>${scale('Energy', ENERGY)}
-    ${D.role === 'owner' ? `<label>Roughly how much did you spend ${day === todayISO() ? 'today' : 'that day'}? (lei, optional, 0 is fine)</label>
+    ${D.role === 'owner' ? `<label>Roughly how much did you spend ${day === eveningISO() ? 'today' : 'that day'}? (lei, optional, 0 is fine)</label>
     <input id="rs" type="number" inputmode="decimal" min="0" value="${m && m.SpentEstimate !== '' && m.SpentEstimate != null ? +m.SpentEstimate : ''}" placeholder="A guess is enough. Your bank import corrects it.">` : ''}
     <label>Sleep last night (0 = terrible, 10 = excellent)</label>
     <div class="sleep" id="sc_Sleep">${Array.from({ length: 11 }, (_, i) => `<button class="${RATE.Sleep === i ? 'on' : ''}" onclick="RATE.Sleep=RATE.Sleep===${i}?'':${i};markSleep()">${i}</button>`).join('')}</div>
@@ -3416,6 +3460,7 @@ function moodSettingsModal() {
     <div class="btns"><button class="btn" onclick="saveMoodSettings()">Save</button></div>
     <h2>This phone</h2>
     ${pushLastText(p.last)}
+    ${pushLogText(p.log)}
     ${START.home ? `<p class="muted small">${PUSHHERE ? '✓ This phone gets the reminder.' : 'Allow notifications when your phone asks.'}</p>
       <div class="btns">${PUSHHERE ? '<button class="btn ghost" onclick="pushBridge(\'push-off\')">Turn off here</button>' : '<button class="btn" onclick="pushBridge(\'push-on\')">Turn on notifications</button>'}
       ${p.devices ? '<button class="btn ghost" onclick="pushTest(this)">Send a test</button>' : ''}</div>`
@@ -3425,9 +3470,17 @@ function moodSettingsModal() {
     <p class="muted small">One a day in the notification and on this page. Add your own, change or delete any.</p>
     <button class="btn ghost wide" onclick="linesModal()">See and edit the lines</button>`);
 }
+// The last evenings, newest first: sent, not needed (already rated) or not sent. An evening missing here was never tried.
+function pushLogText(log) {
+  if (!log || !log.length) return '';
+  const time = ms => new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const say = x => x.what === 'sent' ? 'sent ' + time(x.at) : x.what === 'rated' ? 'not needed, already rated' : 'not sent' + (x.codes && x.codes.length ? ' (code ' + x.codes.join(', ') + ')' : '');
+  return `<div class="card small"><b>Last evenings</b>${log.slice().reverse().slice(0, 7).map(x =>
+    `<div>${esc(new Date(x.day + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }))}${x.kind === 'later' ? ', In 1 hour' : ''}: ${esc(say(x))}</div>`).join('')}</div>`;
+}
 function pushLastText(l) {
   if (!l) return '';
-  const when = new Date(l.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), what = l.why === 'evening' ? 'reminder' : 'test';
+  const when = new Date(l.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), what = { evening: 'reminder', later: '"In 1 hour" reminder' }[l.why] || 'test';
   return `<p class="muted small">${l.ok ? `Last ${what}: ${when}, sent to your phone. If it never appeared, your phone held it back: check its battery settings for SelfMate and Chrome.` : `Last ${what}: ${when}, not sent${l.error ? ' (' + esc(l.error) + ')' : l.codes && l.codes.length ? ' (code ' + esc(l.codes.join(', ')) + ')' : ''}. SelfMate tries again in 15 minutes.`}</p>`;
 }
 async function saveMoodSettings() {
@@ -3590,7 +3643,7 @@ function handleStart() {
   if (STARTED || !D) return;
   STARTED = true;
   // The lines go along so that a notification still has tonight's line if the phone can't reach SelfMate at that moment.
-  if (START.home && window.top !== window) window.top.postMessage({ selfmate: 'hello', offset: D.role === 'owner' ? 0 : 7, lines: (D.lines || []).map(x => String(x.Line || '').trim().slice(0, 300)).filter(Boolean).slice(0, 100) }, '*');
+  if (START.home && window.top !== window) window.top.postMessage({ selfmate: 'hello', offset: D.role === 'owner' ? 0 : 7, title: '🌙 How was your day' + (D.settings[D.role === 'owner' ? 'OwnerName' : 'PartnerName'] ? ', ' + D.settings[D.role === 'owner' ? 'OwnerName' : 'PartnerName'] : '') + '?', lines: (D.lines || []).map(x => String(x.Line || '').trim().slice(0, 300)).filter(Boolean).slice(0, 100) }, '*');
   if (START.open === 'mood') { SEG.me = 'mood'; go('me'); rateModal(todayISO()); }
   else if (START.wish) sharedLink(START.wish);
 }
@@ -3610,7 +3663,7 @@ const MOCK = (() => {
       { _row: 2, Title: 'RCA: Car', Area: 'Car', Due: off(5), RepeatMonths: 12, Cost: 1100 },
       { _row: 3, Title: 'ITP: Car', Area: 'Car', Due: off(24), RepeatMonths: 24, Cost: 200 },
       { _row: 4, Title: 'Impozite locale: tranșa 1', Area: 'Taxes', Due: off(149), RepeatMonths: 12, Cost: 900 },
-      { _row: 5, Title: 'Dentist check-up', Area: 'Health', Due: off(-3), RepeatMonths: 6 },
+      { _row: 5, Title: 'Dentist check-up', Area: 'Health', Due: off(-3), RepeatMonths: 6, Time: '09:30' },
       { _row: 6, Title: 'Passport expiry', Area: 'Documents', Due: '', RepeatMonths: 0 },
       { _row: 7, Title: 'D112: salaries declaration', Area: 'SRL', Due: off(23), RepeatMonths: 1, Private: 'yes' },
       { _row: 8, Title: 'Partner birthday', Area: 'People', Due: off(40), RepeatMonths: 12 },
@@ -3694,6 +3747,10 @@ const MOCK = (() => {
       { _row: 2, Recipe: 'Protein pancakes', Link: 'https:/' + '/www.youtube.com/watch?v=abc', Categories: 'Breakfast, High protein', Added: off(-2) },
       { _row: 3, Recipe: 'Idea from Instagram', Link: 'https:/' + '/www.instagram.com/reel/abc/', Added: off(-1) },
       { _row: 4, Recipe: 'Lemon tart', Link: 'https:/' + '/www.facebook.com/watch/?v=1', Categories: 'Sweets', Status: 'tried', TriedOn: off(-6), Notes: 'Good, less sugar next time', Added: off(-20) }],
+    ideas: [
+      { _row: 2, Idea: 'Bench from old pallets', Link: 'https:/' + '/www.youtube.com/watch?v=def', Categories: 'Home, Crafts', Added: off(-1) },
+      { _row: 3, Idea: 'Idea from Reddit', Link: 'https:/' + '/www.reddit.com/r/DIY/comments/abc/', Added: off(-3) },
+      { _row: 4, Idea: 'Raised garden bed', Categories: 'Garden', Status: 'done', DoneOn: off(-9), Notes: 'Took two weekends', Added: off(-30) }],
     mood: Array.from({ length: 80 }, (_, i) => { const day = off(-i - 1), r = k => Math.abs(Math.sin((i + 3) * 7.13 + k)) ;
       if (r(9) < 0.12) return null;
       const sleep = Math.round(4 + r(1) * 6), ex = r(2) > 0.6, mood = Math.max(1, Math.min(5, Math.round(sleep * 0.35 + (ex ? 0.7 : 0) + r(3) * 1.8 - 0.6)));
@@ -3737,7 +3794,8 @@ const MOCK = (() => {
     if (action === 'setSetting') db.settings[d.key] = d.value;
     if (action === 'deleteRow') { const k = tabKey(d.tab); db[k] = db[k].filter(r => r._row !== d.row); }
     if (action === 'recipeCategory') { const swap = x => String(x || '').split(',').map(c => c.trim()).filter(Boolean).map(c => c === d.from ? d.to : c).filter(Boolean).join(', ');
-      db.settings.RecipeCategories = swap(db.settings.RecipeCategories === undefined ? 'Breakfast, Lunch, Sweets, High protein, Charcuterie' : db.settings.RecipeCategories); db.recipes.forEach(r => { r.Categories = swap(r.Categories); }); }
+      const k = d.list === 'Ideas' ? 'ideas' : 'recipes', L = LISTS[k];
+      db.settings[L.setting] = swap(db.settings[L.setting] === undefined ? L.cats : db.settings[L.setting]); (db[k] || []).forEach(r => { r.Categories = swap(r.Categories); }); }
     if (action === 'renameCategory') { db.categories.forEach(c => { if (c.Category === d.from) c.Category = d.to; }); db.transactions.forEach(t => { if (t.Category === d.from) t.Category = d.to; }); }
     if (action === 'checkin') { const h = db.habit; if (!(h.last >= mondayISO())) h.n++; h.last = t; if (d.plan !== undefined) h.plan = d.plan; return Object.assign({}, h); }
     if (action === 'import') return { added: 0, skipped: 0, unsorted: 0 };
