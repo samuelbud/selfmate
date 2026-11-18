@@ -55,6 +55,8 @@ const TABS = {
   Recipes:      ['Recipe', 'Link', 'Image', 'Categories', 'Status', 'Added', 'TriedOn', 'Notes'],
   // Project ideas for later (DIY, garden, crafts…), shared by both of you. Works like Recipes: categories from the IdeaCategories setting. Status: empty = someday | done.
   Ideas:        ['Idea', 'Link', 'Image', 'Categories', 'Status', 'Added', 'DoneOn', 'Notes'],
+  // Travel ideas: places you'd like to go, shared by both of you. Works like Recipes: categories from the PlaceCategories setting. Status: empty = someday | been.
+  Places:       ['Place', 'Link', 'Image', 'Categories', 'Status', 'Added', 'BeenOn', 'Notes'],
   // One evening rating per person per day. Mood and Energy 1–5, Sleep 0–10 (last night), Tags comma separated. Personal.
   Mood:         ['Date', 'Mood', 'Energy', 'Sleep', 'Tags', 'Note', 'Owner', 'SpentEstimate'],
   // Health (personal, never shared). PerDay = pills a day, Stock = pills left on StockDate. Active: empty = yes, "no" = stopped.
@@ -76,12 +78,12 @@ const PRIVATE_TABS =['Invoices', 'SrlMonths', 'SrlCosts'];
 const HOBBY_TABS = ['Projects', 'Tasks', 'Items', 'ProjectLog'];   // personal: each row belongs to one person
 const PERSONAL_TABS = HOBBY_TABS.concat(['Countries', 'Wishlist', 'Mood', 'Medicines', 'Measures', 'HealthLog']);
 const OWN_ONLY_TABS = ['Wishlist', 'Mood', 'Medicines', 'Measures', 'HealthLog'];   // never shown to the other person, not even while sharing   // rows with an Owner: each link sees and changes only its own
-const EDITABLE_TABS = ['Dates', 'Transactions', 'Goals', 'Categories', 'Rules', 'Trips', 'TripItems', 'Balances', 'Lines', 'Recipes', 'Ideas'].concat(PRIVATE_TABS, PERSONAL_TABS);
-const DELETABLE_TABS = ['Goals', 'Balances', 'ProjectLog', 'Countries', 'TripItems', 'Lines', 'Recipes', 'Ideas', 'Dates'].concat(OWN_ONLY_TABS);   // rows you can remove from the app (everything else: delete in the Sheet)
+const EDITABLE_TABS = ['Dates', 'Transactions', 'Goals', 'Categories', 'Rules', 'Trips', 'TripItems', 'Balances', 'Lines', 'Recipes', 'Ideas', 'Places'].concat(PRIVATE_TABS, PERSONAL_TABS);
+const DELETABLE_TABS = ['Goals', 'Balances', 'ProjectLog', 'Countries', 'TripItems', 'Lines', 'Recipes', 'Ideas', 'Places', 'Dates'].concat(OWN_ONLY_TABS);   // rows you can remove from the app (everything else: delete in the Sheet)
 const BIG_PROJECT_TOOLS = 'time,money,journal,distance,tasks,parts';
-const DATE_COLS = ['Due', 'LastDone', 'Date', 'Started', 'PaidOn', 'Start', 'End', 'Updated', 'Added', 'WaitUntil', 'Decided', 'StockDate', 'TriedOn', 'DoneOn'];   // Dates → End is a date too, but its name is shared with Trips (already a date column)
+const DATE_COLS = ['Due', 'LastDone', 'Date', 'Started', 'PaidOn', 'Start', 'End', 'Updated', 'Added', 'WaitUntil', 'Decided', 'StockDate', 'TriedOn', 'DoneOn', 'BeenOn'];   // Dates → End is a date too, but its name is shared with Trips (already a date column)
 // The partner may change only their own evening-reminder settings and the categories of the shared recipe and idea lists.
-const PARTNER_SETTINGS = ['PartnerMoodTime', 'PartnerMoodPush', 'PartnerMoodTags', 'RecipeCategories', 'IdeaCategories'];
+const PARTNER_SETTINGS = ['PartnerMoodTime', 'PartnerMoodPush', 'PartnerMoodTags', 'RecipeCategories', 'IdeaCategories', 'PlaceCategories'];
 // What identifies a row, per tab. Rows are addressed by their Sheet row number, which shifts when a row above is
 // deleted; before changing a row the server checks these columns still match what the phone saw (see rowFor_).
 const ROW_KEYS = {
@@ -90,7 +92,7 @@ const ROW_KEYS = {
   SrlMonths: ['Month'], SrlCosts: ['Date', 'Amount', 'Item'], Projects: ['Project', 'Owner'], Tasks: ['Project', 'Task'],
   Items: ['Project', 'Item'], ProjectLog: ['Date', 'Project', 'Type', 'Note'], Countries: ['Country', 'Owner'],
   Wishlist: ['Item', 'Added'], Mood: ['Date', 'Owner'], Medicines: ['Name', 'Owner'], Measures: ['Date', 'Kind', 'Value'],
-  HealthLog: ['Date', 'Title'], Lines: ['Line'], Recipes: ['Recipe', 'Added'], Ideas: ['Idea', 'Added'],
+  HealthLog: ['Date', 'Title'], Lines: ['Line'], Recipes: ['Recipe', 'Added'], Ideas: ['Idea', 'Added'], Places: ['Place', 'Added'],
 };
 
 // ---------- Starter data (edit freely in the Sheet afterwards) ----------
@@ -331,7 +333,7 @@ function imports_() {
 }
 
 function upgrade_() {
-  if (prop_('SCHEMA') === '9f' && imports_().every(h => prop_('IMPORTED_' + h.id))) return;
+  if (prop_('SCHEMA') === '9g' && imports_().every(h => prop_('IMPORTED_' + h.id))) return;
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -401,6 +403,11 @@ function upgrade_() {
       const sh = sheet_('Dates'), j = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String).indexOf('Days');
       if (j >= 0) sh.getRange(1, j + 1, sh.getMaxRows(), 1).setNumberFormat('@');   // a list of days stays text
       setProp_('SCHEMA', '9f');
+    }
+    if (prop_('SCHEMA') < '9g') {         // travel ideas, shared by both of you
+      ensureTabs_(ss_());
+      if (settings_().PlaceCategories === undefined) setSetting_('PlaceCategories', 'City break, Beach, Nature, Road trip, Food');
+      setProp_('SCHEMA', '9g');
     }
     imports_().filter(h => !prop_('IMPORTED_' + h.id)).forEach(h => {
       appendRows_('Transactions', h.transactions);
@@ -1035,6 +1042,7 @@ function getData_(who) {
   out.notes = notesFor_(who);
   out.recipes = read_('Recipes');   // shared: both of you see and change the same list
   out.ideas = read_('Ideas');       // shared, like recipes
+  out.places = read_('Places');     // shared, like recipes
   out.push = Object.assign({ devices: subsOf_(who.role).length, last: pushLast_(who.role), log: pushLog_(who.role) }, moodPrefs_(who.role, s));
   return out;
 }
@@ -1187,8 +1195,8 @@ function rate_(who, v) {
 }
 
 // Rename a category of a shared list (to = the new name) or remove it (to empty), in the setting and on every row that has it.
-// list = 'Recipes' (the default, as older pages send nothing) or 'Ideas'.
-const LIST_CATS = { Recipes: 'RecipeCategories', Ideas: 'IdeaCategories' };
+// list = 'Recipes' (the default, as older pages send nothing), 'Ideas' or 'Places'.
+const LIST_CATS = { Recipes: 'RecipeCategories', Ideas: 'IdeaCategories', Places: 'PlaceCategories' };
 function recipeCategory_(from, to, tab) {
   tab = tab || 'Recipes';
   const key = LIST_CATS[tab];

@@ -848,7 +848,7 @@ function checkinModal() {
   let body = '';
   if (st.key === 'import') {
     const f = dataUpTo();
-    body = `<p class="muted">Download the last days from your bank apps (CSV, or PDF from Banca Transilvania) and import them here.</p>
+    body = `<p class="muted">Download the last days from your bank apps (CSV, or PDF from Banca Transilvania or Revolut) and import them here.</p>
       ${f.list.length ? `<div class="card small">${f.list.map(x => `<div>${esc(x[0])}: up to <b>${short(x[1])}</b></div>`).join('')}</div>` : '<p class="muted small">No bank data of yours yet.</p>'}
       ${CI.imported ? '<p>✓ Imported.</p>' : ''}
       <button class="btn ghost wide" onclick="importModal()">⬆ Import a statement</button>`;
@@ -858,7 +858,7 @@ function checkinModal() {
     body = uns.length ? '<p class="muted small">Pick a category for each. To teach SelfMate a rule for a shop, sort it from Money instead.</p>' +
       uns.slice(0, 15).map(t => `<div class="card"><div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(t.Merchant || '(no description)')}</b><b>${(+t.Amount).toLocaleString('ro-RO')}</b></div>
         <div class="muted small">${fmt(t.Date)}, ${esc(t.Account)}</div>
-        <select onchange="if(this.value){ciAgain(act('answer',{row:${t._row},keyword:'',category:this.value}))}"><option value="">Choose…</option>${opts}</select></div>`).join('') +
+        <select onchange="if(this.value==='__new'){newCategoryFor(${t._row},'')}else if(this.value){ciAgain(act('answer',{row:${t._row},keyword:'',category:this.value}))}"><option value="">Choose…</option>${opts}<option value="__new">➕ New category…</option></select></div>`).join('') +
       (uns.length > 15 ? `<p class="muted small">${uns.length - 15} more after these.</p>` : '')
       : '<p>✓ Everything has a category.</p>';
   } else if (st.key === 'ahead') {
@@ -1194,7 +1194,8 @@ function guessKeyword(m) {
 }
 function catChips(onclick) {
   const cats = D.categories.filter(c => c.Category !== 'Unsorted');
-  return `<div class="chips">${cats.map(c => `<button class="chip" onclick="${onclick}('${esc(c.Category).replace(/'/g, "\\'")}')">${c.Emoji} ${esc(c.Category)}</button>`).join('')}</div>`;
+  return `<div class="chips">${cats.map(c => `<button class="chip" onclick="${onclick}('${esc(c.Category).replace(/'/g, "\\'")}')">${c.Emoji} ${esc(c.Category)}</button>`).join('')}
+    <button class="chip" onclick="newCategoryFor(window.${onclick === 'pickTx' ? '_tx' : '_ans'}, val('kw'))">➕ New category</button></div>`;
 }
 function unsortedCard(t) {
   return `<div class="card"><div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(t.Merchant || '(no description)')}</b>
@@ -1241,11 +1242,11 @@ function saveQuick() {
 function importModal() {
   openModal(`<h3>Import a bank statement</h3>
     <p class="muted small"><b>Banca Transilvania:</b> download the statement as <b>PDF</b>. It is read on your phone.<br>
-    <b>Revolut:</b> account → ⋯ → Statement → Excel/CSV → choose period.<br>
+    <b>Revolut:</b> account → ⋯ → Statement → <b>PDF</b> (or CSV) → choose period.<br>
     Only date, amount and merchant are kept. Card numbers and IBANs are removed. Duplicates are skipped, so overlapping periods are fine.</p>
     <label>Account</label><select id="ia"><option>Banca Transilvania</option><option>Revolut</option><option>Other</option></select>
     <label>Whose account?</label><select id="ip"><option value="S" ${myPerson() === 'S' ? 'selected' : ''}>${D.role === 'owner' ? 'Mine' : 'The owner&#39;s'}</option><option value="G" ${myPerson() === 'G' ? 'selected' : ''}>${D.role === 'owner' ? 'My partner&#39;s' : 'Mine'}</option></select>
-    <label>Statement file (CSV, or PDF from Banca Transilvania)</label><input id="if" type="file" onchange="$('#ifmsg').textContent=''">
+    <label>Statement file (CSV, or PDF from Banca Transilvania or Revolut)</label><input id="if" type="file" onchange="$('#ifmsg').textContent=''">
     <p id="ifmsg" class="small" role="alert"></p>
     <div class="btns"><button class="btn" onclick="doImport()">Import</button></div>`);
 }
@@ -1269,11 +1270,12 @@ function doImport() {
     // The PDF is read here on the phone: only the payment rows go to the Sheet, through the normal import.
     say('Reading the PDF…');
     pdfPages(f).then(pages => {
-      const got = btPdfToCsv(pages);
-      if (!got.days) return say('This PDF doesn\'t look like a Banca Transilvania statement. For other banks, export a CSV.');
-      if (got.bad.length) return say(`Nothing was imported: the payments read from this PDF don't add up to the bank's own total on ${got.bad.slice(0, 3).join(', ')}.`);
+      const revolut = pages.some(p => p.some(i => /^Revolut Bank UAB/.test(i.s)));
+      const got = revolut ? revolutPdfToCsv(pages) : btPdfToCsv(pages);
+      if (!got.days) return say('This PDF doesn\'t look like a Banca Transilvania or Revolut statement. For other banks, export a CSV.');
+      if (got.bad.length) return say(`Nothing was imported: the payments read from this PDF don't add up to the bank's own ${revolut ? 'balance' : 'total'} on ${got.bad.slice(0, 3).join(', ')}.`);
       if (!got.n) return say('No payments found in this PDF.');
-      send(got.csv, 'Banca Transilvania');
+      send(got.csv, revolut ? 'Revolut' : 'Banca Transilvania');
     }).catch(e => say(/password/i.test(e && e.name || '') ? 'This PDF is password protected, so it can\'t be read.' : 'The PDF could not be read. Check your internet connection and try again.'));
     return;
   }
@@ -1308,6 +1310,65 @@ async function pdfPages(file) {
 }
 // Banca Transilvania statement → CSV for the normal import. Each day ends with the bank's own totals ("RULAJ ZI"),
 // so a day that doesn't add up is reported and the whole file is refused rather than saved wrong.
+// Revolut statement → CSV for the normal import. Every row shows the balance after it, so each row is checked
+// against the one before (old balance − money out + money in = new balance) and, when the summary is there,
+// the totals against "Money out" and "Money in". Anything that doesn't add up refuses the whole file.
+// Rows without a balance (pending or reverted payments) are left out: they come with a later statement.
+function revolutPdfToCsv(pages) {
+  const MON = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+                ian: 1, mai: 5, iun: 6, iul: 7, noi: 11 };
+  const dateOf = s => {
+    let m = s.match(/^([A-Za-z]{3})[a-z]*\.? (\d{1,2}), (\d{4})$/);   // Nov 1, 2026
+    if (m && MON[m[1].toLowerCase()]) return m[3] + '-' + String(MON[m[1].toLowerCase()]).padStart(2, '0') + '-' + m[2].padStart(2, '0');
+    m = s.match(/^(\d{1,2}) ([A-Za-z]{3})[a-z]*\.? (\d{4})$/);       // 1 nov. 2026
+    if (m && MON[m[2].toLowerCase()]) return m[3] + '-' + String(MON[m[2].toLowerCase()]).padStart(2, '0') + '-' + m[1].padStart(2, '0');
+    return '';
+  };
+  const money = /^(-?[\d.,\s]*\d)\s*([A-Z]{3})$/;
+  const toNum = s => { let t = s.replace(/\s/g, ''); t = /,\d{2}$/.test(t) ? t.replace(/\./g, '').replace(',', '.') : t.replace(/,/g, ''); return +t; };
+  const cents = a => Math.round(a * 100);
+  const rows = [], bad = [];
+  let cols = null, prev = null, outSum = 0, inSum = 0, summary = null, days = 0, currency = 'RON';
+  const check = () => { if (summary && rows.length && (cents(outSum) !== cents(summary.out) || cents(inSum) !== cents(summary.inn))) bad.push('the statement totals'); };
+  pages.forEach(items => {
+    const lines = [];
+    items.slice().sort((a, b) => b.y - a.y).forEach(i => {
+      const l = lines[lines.length - 1];
+      if (l && l.y - i.y <= 2) l.items.push(i); else lines.push({ y: i.y, items: [i] });
+    });
+    lines.forEach(l => {
+      const its = l.items.sort((a, b) => a.x - b.x), text = its.map(i => i.s).join(' ');
+      const st = text.match(/^([A-Z]{3}) Statement$/);
+      if (st) { if (st[1] !== currency) { check(); currency = st[1]; prev = null; outSum = inSum = 0; summary = null; } return; }
+      if (/^Account \(/.test(text)) {   // the balance summary: opening, money out, money in, closing
+        const a = its.filter(i => money.test(i.s)).map(i => toNum(i.s.match(money)[1]));
+        if (a.length >= 4) { summary = { open: a[0], out: a[1], inn: a[2] }; if (prev === null) prev = a[0]; }
+        return;
+      }
+      if (/^Date Description Money out Money in Balance/.test(text)) {
+        const x = s => its.find(i => i.s === s).x;
+        cols = { out: x('Money out'), inn: x('Money in'), bal: x('Balance') };
+        return;
+      }
+      if (!cols || /^(©|Revolut Bank UAB)/.test(text)) { if (/^©/.test(text)) cols = null; return; }
+      const day = its.length && its[0].x < 110 ? dateOf(its[0].s) : '';
+      if (!day) return;   // detail lines (Transaction Id, To:, Card:) and anything outside the table
+      const amts = its.filter(i => money.test(i.s));
+      const near = i => ['out', 'inn', 'bal'].reduce((b, k) => Math.abs(i.x - cols[k]) < Math.abs(i.x - cols[b]) ? k : b, 'out');
+      const v = {};
+      amts.forEach(i => { v[near(i)] = toNum(i.s.match(money)[1]); currency = i.s.match(money)[2]; });
+      if (v.bal === undefined || (v.out === undefined && v.inn === undefined)) return;   // pending or reverted: no balance yet
+      const amount = (v.inn || 0) - (v.out || 0);
+      if (prev !== null && cents(prev + amount) !== cents(v.bal)) bad.push(day);
+      prev = v.bal; outSum += v.out || 0; inSum += v.inn || 0; days++;
+      const desc = its.filter(i => i !== its[0] && !amts.includes(i)).map(i => i.s).join(' ');
+      rows.push({ date: day, amount, currency, title: desc });
+    });
+  });
+  check();
+  const csv = rows.map(r => [r.date, r.amount.toFixed(2), r.currency, r.title.replace(/[,;\t"\r\n]+/g, ' ').trim()].join(','));
+  return { csv: 'Date,Amount,Currency,Description\n' + csv.join('\n') + '\n', n: rows.length, days, bad, rows };
+}
 function btPdfToCsv(pages) {
   const money = /^\d[\d,]*\.\d\d$/, num = s => +s.replace(/,/g, ''), cents = a => Math.round(a * 100);
   const isDate = s => /^\d\d\/\d\d\/\d{4}$/.test(s), iso = s => s.slice(6) + '-' + s.slice(3, 5) + '-' + s.slice(0, 2);
@@ -1422,6 +1483,8 @@ function pastCard(t) {
 }
 function viewTrips() {
   if (SUB === '@map') return viewMap();
+  if (SUB === '@places') return `<button class="back" onclick="go('trips')">‹ All trips</button><h1>Travel ideas</h1>${viewList('places')}
+    <p class="muted small" style="margin-top:24px">🤝 You share this list with ${D.role === 'owner' ? 'your partner' : 'the owner'}.</p>`;
   if (SUB) return viewTrip(D.trips.find(t => t.Trip === SUB));
   const up = D.trips.filter(t => !isPast(t)).sort((a, b) => String(a.Start || '9') < String(b.Start || '9') ? -1 : 1);
   const past = D.trips.filter(isPast).sort((a, b) => a.Start < b.Start ? 1 : -1);
@@ -1432,6 +1495,8 @@ function viewTrips() {
     <div class="card mapteaser" onclick="go('trips','@map')"><div class="globe">🌍</div><div class="grow">
       <b>${st.n} countr${st.n === 1 ? 'y' : 'ies'}, ${pct(st.n, 195)} of the world</b>
       <div class="muted small">${CONTINENTS.filter(c => st.by[c[0]]).map(c => `${c[1]} ${st.by[c[0]]}/${c[2]}`).join(', ') || 'Tap to mark where you have been'}</div></div><span class="muted">›</span></div>
+    <div class="card mapteaser" onclick="go('trips','@places')"><div class="globe">💭</div><div class="grow">
+      <b>Travel ideas</b><div class="muted small">${(n => n ? n + ' place' + (n === 1 ? '' : 's') + ' to go someday' : 'Places you\'d like to go: Share → SelfMate from any app')((D.places || []).filter(p => p.Status !== 'been').length)}</div></div><span class="muted">›</span></div>
     ${years.map(y => {
       const list = past.filter(t => String(t.Start).slice(0, 4) === y);
       return `<h2>${y}</h2><p class="muted small yearline">${list.length} trip${list.length > 1 ? 's' : ''}, ${sum(list, t => tripNights(t)) ? sum(list, t => tripNights(t)) + ' nights away, ' : ''}${lei(sum(list, tripSpent))}</p>
@@ -2505,7 +2570,13 @@ async function saveNames() {
 }
 const CAT_TAGS = [['', 'Nothing special'], ['travel', 'Travel'], ['treat', 'A small everyday treat (coffee, eating out)'], ['subscription', 'A subscription']];
 const tagged = tag => D.categories.filter(c => c.Tag === tag).map(c => c.Category);
-function categoryModal(row) {
+// Sorting a payment into a category that doesn't exist yet: make the category, then sort the payment into it.
+let CAT_THEN = null;
+function newCategoryFor(txRow, keyword) {
+  categoryModal(0, name => { const a = act('answer', { row: txRow, keyword: keyword || '', category: name }, keyword ? 'Added and learned ✓' : 'Added and sorted ✓'); if (CI) ciAgain(a); });
+}
+function categoryModal(row, then) {
+  CAT_THEN = row ? null : then || null;
   const c = row ? D.categories.find(x => x._row === row) : { Emoji: '📌', Type: 'flex', Group: '🍽 Food' };
   const groups = [...new Set(D.categories.map(x => x.Group))];
   const types = [['flex', 'Everyday (counts in the monthly plan)'], ['fixed', 'Fixed monthly bill'], ['pot', 'Paid from the yearly-bills pot'],
@@ -2523,7 +2594,13 @@ function categoryModal(row) {
 async function saveCategory(row) {
   const v = { Emoji: val('ce'), Group: val('cg2'), Type: val('ct2'), MonthlyTarget: +val('cm') || 0, Tag: val('ctg') }, name = val('cn');
   if (!name) return toast('Give it a name');
-  if (!row) return add('Categories', Object.assign({ Category: name }, v), 'Category added ✓');
+  if (!row) {
+    if (D.categories.some(x => String(x.Category).toLowerCase() === name.toLowerCase())) return toast('That name is already used');
+    const then = CAT_THEN; CAT_THEN = null;
+    await add('Categories', Object.assign({ Category: name }, v), 'Category added ✓');
+    if (then) then(name);
+    return;
+  }
   const old = D.categories.find(x => x._row === row);
   if (old.Category !== name) { await call('renameCategory', { from: old.Category, to: name }); old.Category = name; }
   await act('updateRow', { tab: 'Categories', row, values: v }, 'Saved ✓');
@@ -3189,7 +3266,7 @@ async function saveWishRules() {
   toast('Saved ✓'); await load();
 }
 // Text shared from another app ("Rain jacket https://shop.ro/...") → a filled-in recipe, project idea or wish, going by the site.
-// Video and social sites can hold either a recipe or a project idea, so SelfMate asks; shop links go straight to the wishlist.
+// Any link can be a recipe, a project idea, a travel idea, something to buy or a note, so SelfMate asks every time.
 // Every form opened from a share has one-tap buttons to move it somewhere else, in case the guess is wrong.
 let SHARED = null;
 const SOCIAL_SITES = /^https?:\/\/([a-z0-9-]+\.)*(youtube\.com|youtu\.be|instagram\.com|facebook\.com|fb\.com|fb\.watch|tiktok\.com|pinterest\.[a-z.]+|pin\.it|reddit\.com|redd\.it)(\/|$)/i;
@@ -3198,16 +3275,16 @@ function sharedLink(text) {
   const name = String(text).replace(url, '').replace(/\s+/g, ' ').replace(/^["'«“]|["'»”]$/g, '').trim().slice(0, 160);
   SHARED = { url, name };
   if (!url) return sharedNote(String(text).trim());   // no link in it: an idea, a list, a piece of text
-  if (SOCIAL_SITES.test(url)) { go('me'); return askShared(); }
-  SEG.me = 'wish'; go('me');
-  openShared('wish');
+  go('me');
+  askShared();
 }
 const SHARE_TO = [['recipes', '🍳 A recipe', "🍳 It's a recipe"], ['ideas', '💡 A project idea', "💡 It's a project idea"],
+  ['places', '✈️ A travel idea', "✈️ It's a travel idea"],
   ['wish', '🛍️ Something to buy', "🛍️ It's something to buy"], ['note', '📝 A note', "📝 It's a note"]];
 function askShared() {
   openModal(`<h3>Where should this go?</h3>
     <p class="muted small">${esc(SHARED.name || listSource(SHARED.url))}</p>
-    ${SHARE_TO.map(x => `<div class="btns"><button class="btn ${x[0] === 'recipes' || x[0] === 'ideas' ? '' : 'ghost'}" onclick="swapShared('${x[0]}')">${x[1]}</button></div>`).join('')}`);
+    ${SHARE_TO.map(x => `<div class="btns"><button class="btn ghost" onclick="swapShared('${x[0]}')">${x[1]}</button></div>`).join('')}`);
 }
 // The buttons under a shared form: every other place it could go.
 const sharedSwaps = here => `<div class="btns wrap">${SHARE_TO.filter(x => x[0] !== here)
@@ -3218,11 +3295,13 @@ function openShared(to) {
 }
 function swapShared(to) {
   if (to === 'note') { SEG.nv = 'all'; TAB = 'notes'; SUB = null; render(); return sharedNote((SHARED.name + ' ' + SHARED.url).trim(), SHARED.url, true); }
-  SEG.me = to; TAB = 'me'; SUB = null; render(); openShared(to);
+  if (LISTS[to] && LISTS[to].home) { TAB = LISTS[to].home[0]; SUB = LISTS[to].home[1]; }   // travel ideas live in Trips
+  else { SEG.me = to; TAB = 'me'; SUB = null; }
+  render(); openShared(to);
 }
 
-// ---------- SAVED-FOR-LATER LISTS (inside Me): Recipes and Project ideas, each one list shared by both of you ----------
-// Both work the same way; only the words, the Sheet tab and the category setting differ.
+// ---------- SAVED-FOR-LATER LISTS: Recipes and Project ideas (in Me), Travel ideas (in Trips), each one list shared by both of you ----------
+// They all work the same way; only the words, the Sheet tab and the category setting differ.
 // Status: empty = still to do | the list's own "done" word. Categories come from the list's setting (comma separated).
 const LISTS = {
   recipes: { tab: 'Recipes', col: 'Recipe', setting: 'RecipeCategories', cats: 'Breakfast, Lunch, Sweets, High protein, Charcuterie',
@@ -3233,6 +3312,10 @@ const LISTS = {
     icon: '💡', title: 'Project ideas', one: 'project idea', a: 'an idea', what: 'e.g. Bench from old pallets', newCat: 'e.g. Woodwork',
     done: 'done', doneCol: 'DoneOn', todoH: 'Someday', doneH: 'Done', doneBtn: '✓ Did it', doneWord: 'Done',
     how: 'How did it go?', howPh: 'e.g. Took two weekends, worth it', doneToast: 'Marked as done ✓', saved: 'Saved for later 💡' },
+  places: { tab: 'Places', col: 'Place', setting: 'PlaceCategories', cats: 'City break, Beach, Nature, Road trip, Food', home: ['trips', '@places'],
+    icon: '✈️', title: 'Travel ideas', one: 'travel idea', a: 'a travel idea', what: 'e.g. Northern lights in Tromsø', newCat: 'e.g. Ski',
+    done: 'been', doneCol: 'BeenOn', todoH: 'Someday', doneH: 'Been there', doneBtn: '✓ Been there', doneWord: 'Been',
+    how: 'How was it?', howPh: 'e.g. Go in March next time', doneToast: 'Marked as been ✓', saved: 'Saved for later ✈️' },
 };
 const recipes = () => D.recipes || [];
 const listRows = k => D[k] || [];
@@ -3265,7 +3348,7 @@ function viewList(k) {
   const n = c => all.filter(r => splitCats(r.Categories).includes(c)).length;
   const chip = (on, i, label, count) => `<button class="chip ${on ? 'on' : ''}" onclick="listFilter('${k}',${i})">${esc(label)}${count ? ' · ' + count : ''}</button>`;
   return `<div class="btns"><button class="btn" onclick="listModal('${k}',0)">+ Add ${L.a}</button><button class="btn ghost" style="flex:none" onclick="listCatsModal('${k}')" aria-label="Categories">⚙️</button></div>
-    <p class="muted small">Tip: in YouTube, Reddit, Instagram or Facebook tap <b>Share → SelfMate</b> (needs the 🌱 home-screen app), or paste the link here.</p>
+    <p class="muted small">Tip: in any app (YouTube, Reddit, Facebook, Chrome…) tap <b>Share → SelfMate</b> (needs the 🌱 home-screen app), or paste the link here.</p>
     <div class="chips">${chip(!f, -1, 'All', all.length)}${cats.map((c, i) => chip(f === c, i, c, n(c))).join('')}${none ? chip(f === '-', -2, 'No category', none) : ''}</div>
     ${todo.length ? `<h2>${L.todoH} (${todo.length})</h2>${todo.map(r => listCard(k, r)).join('')}` : ''}
     ${done.length ? `<h2>${L.doneH} (${done.length})</h2>${done.map(r => listCard(k, r)).join('')}` : ''}
@@ -3852,6 +3935,9 @@ const MOCK = (() => {
       { _row: 2, Idea: 'Bench from old pallets', Link: 'https:/' + '/www.youtube.com/watch?v=def', Categories: 'Home, Crafts', Added: off(-1) },
       { _row: 3, Idea: 'Idea from Reddit', Link: 'https:/' + '/www.reddit.com/r/DIY/comments/abc/', Added: off(-3) },
       { _row: 4, Idea: 'Raised garden bed', Categories: 'Garden', Status: 'done', DoneOn: off(-9), Notes: 'Took two weekends', Added: off(-30) }],
+    places: [
+      { _row: 2, Place: 'Northern lights in Tromsø', Categories: 'Nature', Added: off(-2) },
+      { _row: 3, Place: 'Idea from Facebook', Link: 'https:/' + '/www.facebook.com/watch/?v=2', Added: off(-5) }],
     mood: Array.from({ length: 80 }, (_, i) => { const day = off(-i - 1), r = k => Math.abs(Math.sin((i + 3) * 7.13 + k)) ;
       if (r(9) < 0.12) return null;
       const sleep = Math.round(4 + r(1) * 6), ex = r(2) > 0.6, mood = Math.max(1, Math.min(5, Math.round(sleep * 0.35 + (ex ? 0.7 : 0) + r(3) * 1.8 - 0.6)));
@@ -3894,7 +3980,7 @@ const MOCK = (() => {
     if (action === 'setSetting') db.settings[d.key] = d.value;
     if (action === 'deleteRow') { const k = tabKey(d.tab); db[k] = db[k].filter(r => r._row !== d.row); }
     if (action === 'recipeCategory') { const swap = x => String(x || '').split(',').map(c => c.trim()).filter(Boolean).map(c => c === d.from ? d.to : c).filter(Boolean).join(', ');
-      const k = d.list === 'Ideas' ? 'ideas' : 'recipes', L = LISTS[k];
+      const k = Object.keys(LISTS).find(x => LISTS[x].tab === (d.list || 'Recipes')), L = LISTS[k];
       db.settings[L.setting] = swap(db.settings[L.setting] === undefined ? L.cats : db.settings[L.setting]); (db[k] || []).forEach(r => { r.Categories = swap(r.Categories); }); }
     if (action === 'renameCategory') { db.categories.forEach(c => { if (c.Category === d.from) c.Category = d.to; }); db.transactions.forEach(t => { if (t.Category === d.from) t.Category = d.to; }); }
     if (action === 'checkin') { const h = db.habit; if (!(h.last >= mondayISO())) h.n++; h.last = t; if (d.plan !== undefined) h.plan = d.plan; return Object.assign({}, h); }
