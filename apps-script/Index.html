@@ -3536,10 +3536,33 @@ function rateModal(day) {
     <label>Sleep last night (0 = terrible, 10 = excellent)</label>
     <div class="sleep" id="sc_Sleep">${Array.from({ length: 11 }, (_, i) => `<button class="${RATE.Sleep === i ? 'on' : ''}" onclick="RATE.Sleep=RATE.Sleep===${i}?'':${i};markSleep()">${i}</button>`).join('')}</div>
     <label>What was part of today? (optional)</label>
-    <div class="chips" id="rtags">${tags.map(t => `<button class="chip ${RATE.tags.has(t) ? 'on' : ''}" onclick="RATE.tags.has(this.dataset.t)?RATE.tags.delete(this.dataset.t):RATE.tags.add(this.dataset.t);this.classList.toggle('on')" data-t="${esc(t)}">${esc(t)}</button>`).join('')}</div>
+    <div class="chips" id="rtags">${tags.map(t => `<button class="chip ${RATE.tags.has(t) ? 'on' : ''}" onclick="RATE.tags.has(this.dataset.t)?RATE.tags.delete(this.dataset.t):RATE.tags.add(this.dataset.t);this.classList.toggle('on')" data-t="${esc(t)}">${esc(t)}</button>`).join('')}<button class="chip" id="rtadd" onclick="newMoodTag()">+ New</button></div>
+    <div class="inline" id="rtnew" style="display:none"><input id="rtn" maxlength="30" placeholder="e.g. Screens, Partner" style="flex:1" onkeydown="if(event.key==='Enter')addMoodTag()"><button class="btn" onclick="addMoodTag()">Add</button></div>
     <label>One line about today (optional)</label><input id="rn" value="${esc(m && m.Note)}" placeholder="e.g. Long walk with a friend">
     <div class="btns"><button class="btn" onclick="saveRating()">Save</button>
       ${m ? `<button class="btn ghost" onclick="if(confirm('Delete this evening?'))act('deleteRow',{tab:'Mood',row:${m._row}},'Deleted')">Delete</button>` : ''}</div>`);
+}
+// A new thing to tick: ticked for this day and kept in the list for the next ones (change or remove it under Me → 🔔).
+function newMoodTag() { $('#rtnew').style.display = ''; $('#rtadd').style.display = 'none'; $('#rtn').focus(); }
+async function addMoodTag() {
+  const name = val('rtn').replace(/,/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 30);
+  if (!name) return toast('Type a name first');
+  const list = moodTags(), same = list.find(t => t.toLowerCase() === name.toLowerCase()) || [...RATE.tags].find(t => t.toLowerCase() === name.toLowerCase());
+  const tag = same || name;
+  RATE.tags.add(tag);
+  const chip = [...document.querySelectorAll('#rtags .chip[data-t]')].find(b => b.dataset.t === tag);
+  if (chip) chip.classList.add('on');
+  else {
+    const b = document.createElement('button');
+    b.className = 'chip on'; b.dataset.t = tag; b.textContent = tag;
+    b.onclick = () => { RATE.tags.has(tag) ? RATE.tags.delete(tag) : RATE.tags.add(tag); b.classList.toggle('on'); };
+    $('#rtags').insertBefore(b, $('#rtadd'));
+  }
+  $('#rtn').value = ''; $('#rtnew').style.display = 'none'; $('#rtadd').style.display = '';
+  if (list.some(t => t.toLowerCase() === tag.toLowerCase())) return;
+  const value = list.concat(tag).join(', ');
+  D.settings[mk('MoodTags')] = value;   // the list shows it at once; the Sheet keeps it for next time
+  await call('setSetting', { key: mk('MoodTags'), value }).then(() => toast('"' + tag + '" added to your list'), () => {});
 }
 function markScale(key) { document.querySelectorAll('#sc_' + key + ' .sc').forEach((b, i) => b.classList.toggle('on', RATE[key] === i + 1)); }
 function markSleep() { document.querySelectorAll('#sc_Sleep button').forEach((b, i) => b.classList.toggle('on', RATE.Sleep === i)); }
