@@ -486,6 +486,17 @@ async function load() {
   render();
   if (!WX) loadWeather();
   noteFlush();
+  tidyMoodTags();
+}
+// Once per person: Alcohol and Money worries left the starter tags (Nov 2026), so they also leave a list saved before.
+// Past ratings keep them, and anyone can add them back with + New.
+function tidyMoodTags() {
+  const key = mk('MoodTags'), done = mk('MoodTagsTidy'), saved = D.settings[key];
+  if (D.settings[done] || STALE) return;
+  D.settings[done] = '1';
+  const left = saved ? String(saved).split(',').map(x => x.trim()).filter(t => t && !['alcohol', 'money worries'].includes(t.toLowerCase())) : null;
+  if (left) { D.settings[key] = left.join(', '); call('setSetting', { key, value: D.settings[key] }).catch(() => {}); }
+  call('setSetting', { key: done, value: '1' }).catch(() => {});
 }
 function lockScreen(st) {
   D = null; closeModal();
@@ -3471,7 +3482,7 @@ function removeRecCat(i) {
 const MOODS = [['😣', 'Very low'], ['😕', 'Low'], ['😐', 'Okay'], ['🙂', 'Good'], ['😄', 'Great']];
 const ENERGY = [['😴', 'Drained'], ['🥱', 'Low'], ['🙂', 'Okay'], ['💪', 'Good'], ['⚡', 'Full']];
 const mk = k => (D.role === 'owner' ? '' : 'Partner') + k;   // my own setting's name (MoodTime / PartnerMoodTime)
-const moodTags = () => String(D.settings[mk('MoodTags')] || 'Work, Exercise, Outdoors, Friends, Family, Partner, Rest, Screens, Alcohol, Stress, Sick, Money worries')
+const moodTags = () => String(D.settings[mk('MoodTags')] || 'Work, Exercise, Outdoors, Friends, Family, Partner, Rest, Screens, Stress, Sick')
   .split(',').map(x => x.trim()).filter(Boolean);
 const moods = () => (D.mood || []).slice().sort((a, b) => a.Date < b.Date ? -1 : 1);
 const moodOn = iso => (D.mood || []).find(m => m.Date === iso);

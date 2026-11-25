@@ -83,7 +83,7 @@ const DELETABLE_TABS = ['Goals', 'Balances', 'ProjectLog', 'Countries', 'TripIte
 const BIG_PROJECT_TOOLS = 'time,money,journal,distance,tasks,parts';
 const DATE_COLS = ['Due', 'LastDone', 'Date', 'Started', 'PaidOn', 'Start', 'End', 'Updated', 'Added', 'WaitUntil', 'Decided', 'StockDate', 'TriedOn', 'DoneOn', 'BeenOn'];   // Dates → End is a date too, but its name is shared with Trips (already a date column)
 // The partner may change only their own evening-reminder settings and the categories of the shared recipe and idea lists.
-const PARTNER_SETTINGS = ['PartnerMoodTime', 'PartnerMoodPush', 'PartnerMoodTags', 'RecipeCategories', 'IdeaCategories', 'PlaceCategories'];
+const PARTNER_SETTINGS = ['PartnerMoodTime', 'PartnerMoodPush', 'PartnerMoodTags', 'PartnerMoodTagsTidy', 'RecipeCategories', 'IdeaCategories', 'PlaceCategories'];
 // What identifies a row, per tab. Rows are addressed by their Sheet row number, which shifts when a row above is
 // deleted; before changing a row the server checks these columns still match what the phone saw (see rowFor_).
 const ROW_KEYS = {
